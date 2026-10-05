@@ -15,9 +15,11 @@ export function AuthProvider({ children }) {
 
     apiRequest("/auth/me", { token: savedToken })
       .then((data) => setUser(data.user))
-      .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
-        setToken(null);
+      .catch((err) => {
+        if (err.status === 401) {
+          localStorage.removeItem(TOKEN_KEY);
+          setToken(null);
+        }
       })
       .finally(() => setInitializing(false));
   }, []);

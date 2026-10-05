@@ -4,7 +4,7 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 
 ## 1. Project Setup
 - [x] Scaffold backend (Express app, folder structure: routes/controllers/models/middleware)
-- [ ] Scaffold frontend (Vite + React + Tailwind)
+- [x] Scaffold frontend (Vite + React + Tailwind)
 - [x] Install backend deps (express, mongoose, bcrypt, jsonwebtoken, cors, dotenv, express-validator)
 - [x] .env files (DATABASE_URL, JWT_SECRET, FRONTEND_URL, BACKEND_URL, PORT)
 - [x] Connect MongoDB via mongoose
@@ -30,16 +30,19 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] Seed script for VENDOR/ADMIN test users (npm run seed)
 
 ## 5. Frontend Auth
-- [ ] Register page (UI)
-- [ ] Login page (UI)
-- [ ] Auth context/state (store user+token, login/logout actions, persist via localStorage)
-- [ ] ProtectedRoute component (redirect if not authenticated / wrong role)
-- [ ] Role-based dashboard pages (Customer/Vendor/Admin - show user info)
-- [ ] Logout wiring (clear state, redirect to login)
+- [x] Register page (UI)
+- [x] Login page (UI)
+- [x] Auth context/state (store user+token, login/logout actions, persist via localStorage)
+- [x] ProtectedRoute component (redirect if not authenticated / wrong role)
+- [x] GuestRoute (logged-in users skip login/register)
+- [x] Role-based dashboard pages (Customer/Vendor/Admin - show user info)
+- [x] Logout wiring (clear state, redirect to login)
 
 ## 6. Wrap-up
-- [ ] Manual test: Register -> Login -> Dashboard -> blocked from other roles' dashboards -> Logout
-- [ ] Lint + build check (frontend & backend)
-- [ ] Update README with Day 1 summary
-- [ ] Git init + first commit
-- [ ] Sync root -> week6/Day1 snapshot, commit, push
+- [x] Manual test: Register -> Login -> Dashboard -> blocked from other roles' dashboards -> Logout (26 browser checks, local + live)
+- [x] Lint + build check (frontend)
+- [x] Deploy backend + frontend on Vercel
+- [x] Update README with Day 1 summary
+- [x] Git init + first commit
+- [x] Code review: input type/length validation, keep token on network errors, required env check, no X-Powered-By
+- [x] Sync root -> week6/Day1 snapshot, commit, push
