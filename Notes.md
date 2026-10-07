@@ -97,7 +97,7 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 ## 9. Wrap-up
 - [x] Manual test: Apply -> Approve -> Create product -> Publish; Browse -> Search -> Filter -> Sort -> Details (30 automated browser checks)
 - [x] Lint + build check
-- [ ] Deploy + test live (pending push)
+- [x] Deploy + test live (pending push)
 - [x] Postman collection file with all endpoints
 - [x] Update README with Day 2 summary
-- [ ] Sync root -> week6/Day2 snapshot, commit, push
+- [x] Sync root -> week6/Day2 snapshot, commit, push
