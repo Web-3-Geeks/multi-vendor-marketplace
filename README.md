@@ -14,6 +14,8 @@ This project is built one day at a time. Each day adds to the same codebase. Sna
 
 **Demo accounts:** anyone can sign up as a customer. Demo admin and vendor credentials are shared privately with the reviewer and are not stored in this repository.
 
+**API testing:** a ready-to-import Postman collection covering every endpoint is at [`postman/MarketHub-API.postman_collection.json`](postman/MarketHub-API.postman_collection.json). Set its `baseUrl` variable, then log in once per role (Admin/Vendor logins auto-save their token).
+
 ## Tech stack
 
 | Layer | Tools |
@@ -27,24 +29,34 @@ This project is built one day at a time. Each day adds to the same codebase. Sna
 ```
 backend/
   server.js              App setup: CORS, JSON parsing, routes, 404, error handler, DB connection
-  constants/roles.js     CUSTOMER, VENDOR, ADMIN in one place
-  models/User.js         User schema, password hashing, password comparison
-  validators/            Request validation rules (register, login)
+  constants/              Roles, vendor statuses, product statuses -- each in one place
+  models/
+    User.js               Password hashing, password comparison
+    Vendor.js              One store per user, status PENDING/APPROVED/SUSPENDED/REJECTED
+    Category.js            Unique name + slug
+    Product.js              Belongs to a vendor and a category; auto DRAFT<->ACTIVE<->OUT_OF_STOCK
+  utils/slugify.js, uniqueSlug.js   URL-friendly slugs; products get a random suffix to avoid clashes
+  validators/             Request validation rules, one file per resource
   middleware/
-    validate.js          Returns 400 with per-field errors if validation fails
-    auth.js              authenticate (401) and requireRole (403)
-    errorHandler.js      Central error handler
-  controllers/           Request handlers (register, login, me, logout)
-  routes/                Auth routes and role dashboard routes
-  scripts/seed.js        Creates the demo vendor and admin accounts
+    validate.js            Returns 400 with per-field errors if validation fails
+    auth.js                authenticate (401) and requireRole (403)
+    loadVendor.js           Loads the caller's store, 403s if it isn't APPROVED
+    errorHandler.js         Central error handler (also maps duplicate keys and bad ids to 409/400)
+  controllers/, routes/   One pair per resource: auth, vendors, admin vendor management,
+                          categories, vendor's own products, the public product catalog
+  scripts/seed.js         Creates the demo vendor (with an APPROVED store) and admin
 
 frontend/src/
-  lib/api.js             One function for every API call (headers, token, errors)
-  context/, hooks/       Auth state: AuthProvider and useAuth()
+  lib/api.js, format.js   One function for every API call; price/date/stock formatting
+  hooks/useApi.js         Generic GET hook: loading/error/data + a reload() for after a mutation
+  context/, hooks/        Auth state: AuthProvider and useAuth()
   components/routing/    ProtectedRoute and GuestRoute
-  components/ui/         TextField, Button, Alert, FullPageLoader
+  components/ui/         TextField, Select, TextArea, Button, Modal, Badge, Alert, Spinner...
   components/dashboard/  Layout, sidebar and dashboard widgets
-  pages/                 Login, Register and the three role dashboards
+  components/marketplace/ Public header/layout, product card, filters, pagination
+  components/vendor/     Become-a-vendor form, product add/edit modal, product table row
+  components/admin/      Vendor application review, category CRUD
+  pages/                 Login, Register, three role dashboards, and the public marketplace pages
 ```
 
 ## Running locally
@@ -98,6 +110,23 @@ npm run dev             # http://localhost:5173
 | GET | `/api/customer/dashboard` | CUSTOMER | Demo protected route |
 | GET | `/api/vendor/dashboard` | VENDOR | Demo protected route |
 | GET | `/api/admin/dashboard` | ADMIN | Demo protected route |
+| POST | `/api/vendors` | CUSTOMER | Submit a vendor application (status starts `PENDING`) |
+| GET | `/api/vendors/me` | Logged in | The caller's own vendor application, or `null` |
+| GET | `/api/vendors` | Public | List approved stores |
+| GET | `/api/vendors/:id` | Public | One approved store's public info |
+| GET | `/api/admin/vendors` | ADMIN | List vendor applications, optional `?status=` filter |
+| GET | `/api/admin/vendors/:id` | ADMIN | One vendor application |
+| PATCH | `/api/admin/vendors/:id/status` | ADMIN | Set `APPROVED`, `REJECTED` or `SUSPENDED` |
+| GET | `/api/categories` | Public | List categories |
+| POST | `/api/categories` | ADMIN | Create a category (slug is generated from the name) |
+| PATCH | `/api/categories/:id` | ADMIN | Update a category |
+| DELETE | `/api/categories/:id` | ADMIN | Delete, blocked with 409 if a product still uses it |
+| POST | `/api/vendor/products` | VENDOR, approved store | Create a product (defaults to `DRAFT`) |
+| GET | `/api/vendor/products` | VENDOR, approved store | List the caller's own products, optional `?status=` |
+| GET \| PATCH | `/api/vendor/products/:id` | VENDOR, approved store | Read or update **your own** product only |
+| DELETE | `/api/vendor/products/:id` | VENDOR, approved store | Archive (soft delete) your own product |
+| GET | `/api/products` | Public | Active products only. `?search=&category=&vendor=&minPrice=&maxPrice=&sort=&page=&limit=` |
+| GET | `/api/products/:id` | Public | One active product, with its vendor and category |
 
 Protected requests send `Authorization: Bearer <token>`.
 
@@ -105,11 +134,11 @@ Protected requests send `Authorization: Bearer <token>`.
 
 | Code | Meaning |
 |---|---|
-| 400 | Validation failed. Body has `errors: [{ field, message }]` |
+| 400 | Validation failed, or a URL id isn't a valid Mongo id. Body has `errors: [{ field, message }]` where relevant |
 | 401 | Not logged in: token missing, invalid, expired, or user no longer exists |
-| 403 | Logged in, but the role is not allowed |
-| 404 | Route not found |
-| 409 | Email already registered |
+| 403 | Logged in, but the role (or vendor approval status) doesn't allow this |
+| 404 | Route not found, or found but not yours (vendors never get a 403 for another vendor's product -- see "Key decisions") |
+| 409 | A unique field (email, category name/slug, product slug) is already in use, or a category is still used by products |
 | 500 | Unexpected error. Details are logged on the server, not sent to the client |
 
 ---
@@ -180,5 +209,66 @@ Backend and frontend are separate Vercel projects from the same repository (root
 - There is no rate limiting on login yet.
 - Tokens cannot be revoked before they expire (see "Logout").
 - Login answers slightly faster for an unregistered email, because no password hash is checked. This small timing difference could hint which emails exist.
-- The error handler reports every duplicate-key error as "Email already registered". That is correct while email is the only unique field, and needs to change when more unique fields are added.
-- Dashboard sections for products, orders and payments are placeholders. They are marked "Soon" and show empty states, not sample numbers.
+- Dashboard sections for orders and payments are still placeholders, marked "Soon". Products are no longer a placeholder as of Day 2 (see below).
+
+---
+
+## Day 2: Vendor management, products and the marketplace catalog
+
+### What was built
+
+**Backend**
+- `Vendor` model: one store per user (`unique` on the user reference), status `PENDING` / `APPROVED` / `SUSPENDED` / `REJECTED`, defaulting to `PENDING`.
+- `POST /api/vendors` lets a logged-in `CUSTOMER` apply once; `GET /api/vendors/me` returns the caller's own application (or `null`) so the frontend can show the right screen.
+- Admin vendor management: list (with a status filter), get one, and `PATCH .../status` to approve, reject or suspend. Approving or suspending also updates the applicant's `User.role` (see "Key decisions").
+- `Category` model with a unique name and slug, admin-only create/update/delete, public read. Deleting a category that's still used by a product is blocked with 409 instead of leaving products pointing at nothing.
+- `Product` model: belongs to one `Vendor` and one `Category`, price must be greater than zero, stock can't be negative, slug is unique platform-wide. A `pre("validate")` hook keeps `status` honest: an `ACTIVE` product whose stock hits 0 flips itself to `OUT_OF_STOCK`, and restocking flips it back -- vendors never set `OUT_OF_STOCK` by hand.
+- Vendor product CRUD, all scoped to the caller's own store: create, list (with a status filter), read one, update, and archive (soft delete). A product can only become `ACTIVE` if its vendor is approved, the category still exists, and it has a name, price, stock and description.
+- Public catalog: `GET /api/products` returns only `ACTIVE` products from `APPROVED` vendors, with search (name or description, case-insensitive, regex-escaped), category (slug or id), vendor, price range, sorting (`newest` / `price_asc` / `price_desc`) and pagination (max 50 per page). `GET /api/products/:id` returns one product with its vendor and category, 404 if it's not active or its vendor isn't approved.
+- `loadVendor` middleware and the `CastError` → 400 fix (see "Key decisions") are shared across every resource added this day.
+
+**Frontend**
+- Public marketplace, reachable with or without logging in: `/products` (search, category, price range and sort filters that update the list without a page reload, via URL query params so a filtered view is shareable and survives a refresh), `/products/:id` (gallery, description, stock, a disabled "Add to Cart" wired up on Day 3), and `/vendor/:id` (a store page listing that vendor's products).
+- A "Become a vendor" card on the customer dashboard: an application form if the customer has none yet, or their current status and what it means if they do.
+- The vendor dashboard now shows real data: store status (with a plain-English explanation when it's not `APPROVED`), product counts, and -- once approved -- a product table with add/edit (a shared modal), inline stock editing, and archive. Pending or suspended vendors see their status and nothing to manage, since there's nothing to manage yet.
+- The admin dashboard gained a vendor-applications panel (tabs by status, approve/reject/suspend buttons that only show where they make sense) and a categories panel (create, inline edit, delete).
+- A small `useApi(path)` hook wraps every `GET` used by these pages: loading/error/data plus a `reload()` for after a mutation, so list screens don't each reinvent `useEffect` + `useState`.
+
+### Key decisions and why
+
+**A suspended vendor keeps the `VENDOR` role; a rejected one doesn't.**
+The first version of this flipped role to `CUSTOMER` for anything that wasn't `APPROVED`. Testing caught the problem: `ProtectedRoute` requires `VENDOR` to even load `/vendor`, so a suspended vendor demoted to `CUSTOMER` would get redirected to `/customer` before ever seeing *why* -- the "your store is suspended" screen was unreachable. Now suspending keeps `VENDOR` (they can still log in and see their status), while rejecting -- which means they were never approved -- drops back to `CUSTOMER`. Either way, `loadVendor` blocks the actual product endpoints unless the store is `APPROVED`, so the role is about what a vendor can *see*, not what they're allowed to *do* -- that's still enforced by status, same as Day 1's rule that the backend decides access, not the client.
+
+**Ownership is enforced by query, not by checking after the fact.**
+A vendor's product routes never do `Product.findById(id)` and then compare `product.vendor` to the caller. They do `Product.findOne({ _id: id, vendor: req.vendor._id })` -- the database itself only returns the row if both match. Try to edit, read or archive another vendor's product and the query finds nothing, so it's a 404, the same as if the id didn't exist at all. A 403 would confirm the product exists and just isn't yours; 404 gives an attacker nothing. The same pattern protects `category` and `vendor` from ever being set by the request body: both models whitelist which fields a request can touch (`EDITABLE_FIELDS` in the product controller), so sending `"vendor": "someone-else's-store-id"` is silently ignored, not an error -- a careless client just doesn't get what it asked for.
+
+**`OUT_OF_STOCK` is computed, not set.**
+It's tempting to let the status dropdown include it, but then a vendor could set `ACTIVE` with 50 in stock and `OUT_OF_STOCK` with 50 in stock at the same time -- two fields disagreeing about the same fact. Instead the `Product` schema's `pre("validate")` hook is the single source of truth: stock hits 0 on an `ACTIVE` product, it becomes `OUT_OF_STOCK`; stock comes back, it becomes `ACTIVE` again. The vendor only ever chooses between `DRAFT`, `ACTIVE` and `ARCHIVED`.
+
+**Product slugs get a random suffix; category slugs don't.**
+A category's name is already unique, so its slug is too. Two different vendors can both sell something called "iPhone 15 Pro" -- if both slugified to `iphone-15-pro`, the second create would fail with a confusing conflict. `uniqueSlug()` appends 6 random hex characters (`iphone-15-pro-a3f9c1`), so the slug stays readable and still can't collide in practice.
+
+**Archiving is still the only delete.**
+Day 1 already decided this for conceptual reasons (products referenced by future orders shouldn't vanish); Day 2 just applies it to the new resource. `DELETE /api/vendor/products/:id` sets `status: ARCHIVED` and the product disappears from the public catalog (it's not `ACTIVE`) without the underlying row -- and its id, which Day 3's cart/order system will reference -- being destroyed.
+
+**Malformed ids are a 400, not a 500.**
+Testing `/api/admin/vendors/abc` (a non-id string, not a 404-shaped id) turned up a real bug: Mongoose throws a `CastError` trying to parse `"abc"` as an ObjectId, and the Day 1 error handler didn't recognize it, so it fell through to a generic 500. Fixed once, centrally, in `errorHandler.js` (`err.name === "CastError"` → 400), which fixed every `:id` route added this day for free, including the vendor and product endpoints -- this is why the central error handler exists instead of per-route validation of every id.
+
+**The marketplace is public; the dashboards aren't.**
+`/products`, `/products/:id` and `/vendor/:id` sit outside `ProtectedRoute` and `GuestRoute` entirely, under their own `MarketplaceLayout`, with a header that shows Login/Sign up for guests and a Dashboard link for anyone logged in. A shopper shouldn't need an account to browse, same as any real marketplace.
+
+**Filters live in the URL, not just component state.**
+`ProductsPage` reads and writes its filters through `useSearchParams` instead of plain `useState`. A filtered, sorted, paginated view is then a real link someone can share or bookmark, survives a refresh, and works with the browser's back button -- all for free, without extra code.
+
+### Testing done
+
+- **API:** the full vendor lifecycle (apply → pending → approve → role becomes `VENDOR` → suspend → role stays `VENDOR` but product routes 403 → re-approve), category CRUD including the in-use-can't-delete case, and product CRUD including the ownership checks (another vendor gets 404, not 403, on your product) and the auto `ACTIVE` ↔ `OUT_OF_STOCK` flip. Malformed ids, missing categories, and non-vendor/non-admin roles hitting the wrong endpoints were all checked for the right 400/403/404.
+- **Browser:** 30 automated end-to-end checks in Microsoft Edge covering the public marketplace (search, category filter, price range, sort, pagination, clearing filters), a product detail and its vendor's store page, a brand-new customer applying as a vendor and seeing `Pending`, an admin approving that application and managing categories (including the blocked delete), and the demo vendor publishing a draft product, creating a new one, editing its stock inline, and archiving it -- then confirming a suspended vendor sees the restricted dashboard instead of the product table. Most of the early test failures here were the test's own timing being too optimistic for MongoDB Atlas's network round-trip (500-900ms per request) combined with the 400ms search debounce, not application bugs -- worth noting since it's an easy trap when testing anything that talks to a cloud database.
+- `npm run lint` and `npm run build` pass for the frontend.
+
+### Known limitations
+
+- Vendor applications, once rejected, can be reconsidered (set back to `APPROVED`) through the same endpoint a normal approval uses. There's no separate "appeal" flow or history of past decisions -- only the current status is stored.
+- The vendor product form accepts image URLs as a comma-separated field rather than a real upload; there's no image hosting in this project yet.
+- Search matches `name` and `description` with a case-insensitive substring regex, not a text index -- fine at this scale, would want `$text` or a real search service at catalog sizes in the thousands.
+- Local development and the live site still share one Atlas database (see Day 1), so Day 2 testing was done directly against the shared data and cleaned up with a script afterward rather than against an isolated test database.

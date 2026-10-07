@@ -1,14 +1,19 @@
 const errorHandler = (err, req, res, next) => {
-    if (err.code === 11000) {
-        return res.status(409).json({ message: "Email already registered" });
-    }
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyPattern || {})[0] || "value";
+    return res.status(409).json({ message: `This ${field} is already in use` });
+  }
 
-    const statusCode = err.statusCode || 500;
-    const message = statusCode === 500 ? "Internal server error" : err.message;
+  if (err.name === "CastError") {
+    return res.status(400).json({ message: `Invalid ${err.path}` });
+  }
 
-    if (statusCode === 500) console.error(err);
+  const statusCode = err.statusCode || 500;
+  const message = statusCode === 500 ? "Internal server error" : err.message;
 
-    res.status(statusCode).json({ message });
+  if (statusCode === 500) console.error(err);
+
+  res.status(statusCode).json({ message });
 };
 
 module.exports = errorHandler;

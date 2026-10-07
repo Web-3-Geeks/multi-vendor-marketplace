@@ -3,6 +3,11 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const errorHandler = require("./middleware/errorHandler");
 const authRoutes = require("./routes/authRoutes");
+const vendorRoutes = require("./routes/vendorRoutes");
+const adminVendorRoutes = require("./routes/adminVendorRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
+const vendorProductRoutes = require("./routes/vendorProductRoutes");
+const publicProductRoutes = require("./routes/publicProductRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const dotenv = require("dotenv");
 
@@ -28,6 +33,16 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 
 app.use("/api", dashboardRoutes);
+
+app.use("/api/vendors", vendorRoutes);
+
+app.use("/api/admin/vendors", adminVendorRoutes);
+
+app.use("/api/categories", categoryRoutes);
+
+app.use("/api/vendor/products", vendorProductRoutes);
+
+app.use("/api/products", publicProductRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });

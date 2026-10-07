@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const User = require("../models/User");
 const ROLES = require("../constants/roles");
+const Vendor = require("../models/Vendor");
+const VENDOR_STATUS = require("../constants/vendorStatus");
 
 dotenv.config();
 
@@ -38,6 +40,20 @@ const seed = async () => {
     }
     await User.create(data);
     console.log(`Created ${data.role}: ${data.email}`);
+  }
+
+  const vendorUser = await User.findOne({ email: "vendor@test.com" });
+  const hasStore = await Vendor.exists({ user: vendorUser._id });
+  if (hasStore) {
+    console.log("Skipped store for vendor@test.com (already exists)");
+  } else {
+    await Vendor.create({
+      user: vendorUser._id,
+      storeName: "Demo Store",
+      storeDescription: "The demo vendor's store",
+      status: VENDOR_STATUS.APPROVED,
+    });
+    console.log("Created APPROVED store for vendor@test.com");
   }
 
   await mongoose.disconnect();

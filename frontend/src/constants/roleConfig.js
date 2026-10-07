@@ -34,7 +34,7 @@ export const ROLE_CONFIG = {
     navSection: 'Shopping',
     nav: [
       { label: 'Overview', icon: LayoutDashboard, active: true },
-      { label: 'Browse products', icon: ShoppingBag },
+      { label: 'Browse products', icon: ShoppingBag, to: '/products' },
       { label: 'Cart', icon: ShoppingCart },
       { label: 'My orders', icon: Package },
     ],

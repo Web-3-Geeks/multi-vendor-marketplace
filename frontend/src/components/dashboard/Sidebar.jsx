@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { LogOut, ShoppingBag, X } from 'lucide-react'
 import { APP_NAME } from '../../constants/app'
 
@@ -37,7 +38,7 @@ function Sidebar({ user, config, onLogout, onClose }) {
           {config.navSection}
         </p>
         <ul className="space-y-1">
-          {config.nav.map(({ label, icon: Icon, active }) => (
+          {config.nav.map(({ label, icon: Icon, active, to }) => (
             <li key={label}>
               {active ? (
                 <span
@@ -47,6 +48,15 @@ function Sidebar({ user, config, onLogout, onClose }) {
                   <Icon aria-hidden="true" className={`size-4.5 ${config.accentText}`} />
                   {label}
                 </span>
+              ) : to ? (
+                <Link
+                  to={to}
+                  onClick={onClose}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 transition hover:bg-white hover:text-slate-900"
+                >
+                  <Icon aria-hidden="true" className="size-4.5" />
+                  {label}
+                </Link>
               ) : (
                 <span
                   aria-disabled="true"

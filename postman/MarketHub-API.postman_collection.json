@@ -1,0 +1,430 @@
+{
+  "info": {
+    "name": "MarketHub API",
+    "description": "Multi-vendor marketplace API: auth, RBAC, vendor applications, categories, vendor product management, and the public marketplace catalog.\n\nSet `baseUrl` to your local (http://localhost:5000/api) or live backend URL. Login/register requests auto-save their token to the matching collection variable (token, adminToken, vendorToken) via a test script, so most other requests just reference {{token}} etc. directly.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api" },
+    { "key": "token", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "vendorToken", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "vendorApplicationId", "value": "" },
+    { "key": "productId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register (customer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Customer\",\n  \"email\": \"customer@example.com\",\n  \"password\": \"pass1234\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login (saves token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('token', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"pass1234\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login as Admin (saves adminToken)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('adminToken', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"<SEED_ADMIN_PASSWORD from backend/.env>\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login as Vendor (saves vendorToken)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('vendorToken', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"vendor@test.com\",\n  \"password\": \"<SEED_VENDOR_PASSWORD from backend/.env>\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Current user (/me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Role Dashboards (Day 1 demo routes)",
+      "item": [
+        {
+          "name": "Customer dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/customer/dashboard"
+          }
+        },
+        {
+          "name": "Vendor dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "url": "{{baseUrl}}/vendor/dashboard"
+          }
+        },
+        {
+          "name": "Admin dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/dashboard"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendor Applications",
+      "item": [
+        {
+          "name": "Apply as vendor (customer only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/vendors",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"storeName\": \"My Store\",\n  \"storeDescription\": \"What this store sells\",\n  \"logo\": \"https://example.com/logo.png\"\n}"
+            }
+          }
+        },
+        {
+          "name": "My application status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/vendors/me"
+          }
+        },
+        {
+          "name": "List approved stores (public)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/vendors" }
+        },
+        {
+          "name": "Get store by id (public)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/vendors/:id" }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Vendor Management",
+      "item": [
+        {
+          "name": "List vendor applications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/vendors?status=PENDING",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "vendors"],
+              "query": [{ "key": "status", "value": "PENDING", "description": "PENDING | APPROVED | SUSPENDED | REJECTED (optional)" }]
+            }
+          }
+        },
+        {
+          "name": "Get vendor application by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}"
+          }
+        },
+        {
+          "name": "Approve vendor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}/status",
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"APPROVED\"\n}" }
+          }
+        },
+        {
+          "name": "Reject vendor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}/status",
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"REJECTED\"\n}" }
+          }
+        },
+        {
+          "name": "Suspend vendor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}/status",
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"SUSPENDED\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List categories (public)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/categories" }
+        },
+        {
+          "name": "Create category (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('categoryId', pm.response.json().category._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Electronics\",\n  \"description\": \"Phones, laptops and gadgets\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update category (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/categories/{{categoryId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated description\"\n}" }
+          }
+        },
+        {
+          "name": "Delete category (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/categories/{{categoryId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendor - My Products",
+      "item": [
+        {
+          "name": "Create product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('productId', pm.response.json().product._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
+            ],
+            "url": "{{baseUrl}}/vendor/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Wireless Mouse\",\n  \"description\": \"Ergonomic wireless mouse\",\n  \"price\": 19.99,\n  \"stock\": 50,\n  \"category\": \"{{categoryId}}\",\n  \"images\": [\"https://example.com/mouse.png\"],\n  \"status\": \"DRAFT\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List my products",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/vendor/products?status=ACTIVE",
+              "host": ["{{baseUrl}}"],
+              "path": ["vendor", "products"],
+              "query": [{ "key": "status", "value": "ACTIVE", "description": "DRAFT | ACTIVE | OUT_OF_STOCK | ARCHIVED (optional)" }]
+            }
+          }
+        },
+        {
+          "name": "Get my product by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "url": "{{baseUrl}}/vendor/products/{{productId}}"
+          }
+        },
+        {
+          "name": "Update my product / publish",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
+            ],
+            "url": "{{baseUrl}}/vendor/products/{{productId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"ACTIVE\"\n}" }
+          }
+        },
+        {
+          "name": "Update stock",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
+            ],
+            "url": "{{baseUrl}}/vendor/products/{{productId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"stock\": 0\n}" }
+          }
+        },
+        {
+          "name": "Archive product (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "url": "{{baseUrl}}/vendor/products/{{productId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public Marketplace",
+      "item": [
+        {
+          "name": "Browse products (search, filter, sort, paginate)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products?search=mouse&category=electronics&minPrice=5&maxPrice=50&sort=price_asc&page=1&limit=12",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "search", "value": "mouse" },
+                { "key": "category", "value": "electronics", "description": "category slug or id" },
+                { "key": "vendor", "value": "", "description": "vendor id", "disabled": true },
+                { "key": "minPrice", "value": "5" },
+                { "key": "maxPrice", "value": "50" },
+                { "key": "sort", "value": "price_asc", "description": "newest | price_asc | price_desc" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "12", "description": "max 50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get product by id",
+          "request": { "method": "GET", "url": "{{baseUrl}}/products/{{productId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        { "name": "Health check", "request": { "method": "GET", "url": "{{baseUrl}}/health" } }
+      ]
+    }
+  ]
+}
