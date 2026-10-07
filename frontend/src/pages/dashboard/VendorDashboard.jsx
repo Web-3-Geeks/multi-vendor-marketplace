@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Boxes, Package, Plus, TriangleAlert } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
+import { Boxes, Plus, TriangleAlert } from 'lucide-react'
 import { ROLE_CONFIG } from '../../constants/roleConfig'
 import { VENDOR_STATUS, VENDOR_STATUS_MESSAGE, VENDOR_STATUS_TONE, readableStatus } from '../../constants/status'
 import { useApi } from '../../hooks/useApi'
@@ -12,6 +13,7 @@ import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
 import VendorProductRow from '../../components/vendor/VendorProductRow'
 import ProductFormModal from '../../components/vendor/ProductFormModal'
+import VendorOrdersPanel from '../../components/vendor/VendorOrdersPanel'
 
 function VendorDashboard({ user }) {
   const config = ROLE_CONFIG[user.role]
@@ -76,6 +78,19 @@ function VendorDashboard({ user }) {
     }
   }
 
+  const location = useLocation()
+
+  // Sidebar links to "My products" / "Orders" point here as #hash anchors --
+  // there's no separate route for them, everything lives on this one page.
+  // React Router doesn't scroll to a hash on its own (it only updates the URL),
+  // so this does it by hand whenever the hash changes, including clicking the
+  // same link again while already on this page.
+  useEffect(() => {
+    if (!location.hash) return
+    const el = document.getElementById(location.hash.slice(1))
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [location.hash, storeLoading])
+
   if (storeLoading) return <Spinner label="Loading your store..." />
 
   const isApproved = vendor?.status === VENDOR_STATUS.APPROVED
@@ -119,6 +134,7 @@ function VendorDashboard({ user }) {
             </div>
           </section>
 
+          <div id="products" className="scroll-mt-20" />
           <Panel
             title="Your products"
             action={
@@ -174,13 +190,8 @@ function VendorDashboard({ user }) {
 
       <div className="grid gap-5 lg:grid-cols-5">
         <div className="space-y-5 lg:col-span-3">
-          <Panel title="Recent orders">
-            <EmptyState
-              icon={Package}
-              title="No orders yet"
-              text="Orders for your products will show up here."
-            />
-          </Panel>
+          <div id="orders" className="scroll-mt-20" />
+          {isApproved && <VendorOrdersPanel />}
         </div>
         <div className="lg:col-span-2">
           <PermissionsPanel role={user.role} />

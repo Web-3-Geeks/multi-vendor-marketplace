@@ -2,15 +2,39 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft, ImageOff, ShoppingCart, Store, Tag } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
+import { useAuth } from '../../hooks/useAuth'
+import { useCart } from '../../hooks/useCart'
 import { formatPrice, stockInfo } from '../../lib/format'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
+import Button from '../../components/ui/Button'
+import QuantityStepper from '../../components/ui/QuantityStepper'
 
 function ProductDetailPage() {
   const { id } = useParams()
   const { data, error, loading } = useApi(`/products/${id}`)
   const [activeImage, setActiveImage] = useState(0)
+  const [quantity, setQuantity] = useState(1)
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState('')
+  const [added, setAdded] = useState(false)
+  const { user } = useAuth()
+  const { addItem } = useCart()
+
+  const handleAddToCart = async () => {
+    setAddError('')
+    setAdded(false)
+    setAdding(true)
+    try {
+      await addItem(id, quantity)
+      setAdded(true)
+    } catch (err) {
+      setAddError(err.message)
+    } finally {
+      setAdding(false)
+    }
+  }
 
   if (loading) return <Spinner label="Loading product..." />
 
@@ -104,15 +128,45 @@ function ProductDetailPage() {
             </div>
           </Link>
 
-          <button
-            type="button"
-            disabled={product.stock <= 0}
-            title="Cart will be connected on Day 3"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-          >
-            <ShoppingCart aria-hidden="true" className="size-4" />
-            {product.stock <= 0 ? 'Out of stock' : 'Add to Cart'}
-          </button>
+          {addError && <Alert>{addError}</Alert>}
+          {added && (
+            <Alert variant="success">
+              Added to cart.{' '}
+              <Link to="/cart" className="font-semibold underline">
+                View cart
+              </Link>
+            </Alert>
+          )}
+
+          {product.stock > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-slate-600">Quantity</span>
+              <QuantityStepper
+                value={quantity}
+                onChange={(next) => {
+                  setQuantity(next)
+                  setAdded(false)
+                }}
+                min={1}
+                max={product.stock}
+                disabled={adding}
+              />
+            </div>
+          )}
+
+          {user ? (
+            <Button onClick={handleAddToCart} loading={adding} disabled={product.stock <= 0}>
+              <ShoppingCart aria-hidden="true" className="size-4" />
+              {product.stock <= 0 ? 'Out of stock' : 'Add to Cart'}
+            </Button>
+          ) : (
+            <Link
+              to="/login"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-500"
+            >
+              Log in to add to cart
+            </Link>
+          )}
         </div>
       </div>
     </div>

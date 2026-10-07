@@ -41,3 +41,40 @@ export const readableStatus = (status) =>
     .split('_')
     .map((part) => part[0] + part.slice(1).toLowerCase())
     .join(' ')
+
+export const ORDER_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  PROCESSING: 'PROCESSING',
+  SHIPPED: 'SHIPPED',
+  DELIVERED: 'DELIVERED',
+  CANCELLED: 'CANCELLED',
+})
+
+// Same forward order as the backend's ORDER_STATUS_SEQUENCE -- used to figure out
+// which status a vendor can move an order segment to next.
+export const ORDER_STATUS_SEQUENCE = [
+  ORDER_STATUS.PENDING,
+  ORDER_STATUS.CONFIRMED,
+  ORDER_STATUS.PROCESSING,
+  ORDER_STATUS.SHIPPED,
+  ORDER_STATUS.DELIVERED,
+]
+
+export const ORDER_STATUS_TONE = {
+  [ORDER_STATUS.PENDING]: 'slate',
+  [ORDER_STATUS.CONFIRMED]: 'indigo',
+  [ORDER_STATUS.PROCESSING]: 'amber',
+  [ORDER_STATUS.SHIPPED]: 'indigo',
+  [ORDER_STATUS.DELIVERED]: 'emerald',
+  [ORDER_STATUS.CANCELLED]: 'rose',
+}
+
+// The one status a vendor can move an order segment to next, or null if it's
+// already in a terminal state (matches the backend's isValidTransition rule:
+// one step forward at a time).
+export const nextOrderStatus = (status) => {
+  const index = ORDER_STATUS_SEQUENCE.indexOf(status)
+  if (index === -1 || index === ORDER_STATUS_SEQUENCE.length - 1) return null
+  return ORDER_STATUS_SEQUENCE[index + 1]
+}

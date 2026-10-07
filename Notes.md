@@ -138,19 +138,23 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] PATCH /api/vendor/orders/:id/status (own items only, validate allowed transitions)
 
 ## 8. Cart Frontend
-- [ ] /cart page (image, name, vendor, price, qty controls, subtotal, remove, cart subtotal, checkout button)
-- [ ] No full page reload on qty change; loading states; stock error messages; empty cart state
+- [x] /cart page (image, name, vendor, price, qty controls, subtotal, remove, cart subtotal, checkout button)
+- [x] No full page reload on qty change; loading states; stock error messages; empty cart state
+- [x] Header cart icon + live item-count badge (CartContext shared across the app)
+- [x] Product detail page: quantity selector + working Add to Cart (login-gated for guests)
 
 ## 9. Checkout Page
-- [ ] /checkout (items, vendor info, qty, prices, subtotal/shipping/discount/tax/grand total, placeholder payment = Cash on Delivery)
+- [x] /checkout (items, vendor info, qty, prices, subtotal/shipping/discount/tax/grand total, placeholder payment = Cash on Delivery)
 
 ## 10. Customer Orders UI
-- [ ] /orders (history list) and /orders/:id (detail: items, vendors, totals, status, date)
+- [x] /orders (history list) and /orders/:id (detail: items, vendors, totals, status, date)
+- [x] Customer dashboard "Recent orders" wired to real data
+- [x] Vendor dashboard order management UI (list own order-item segments, advance/cancel status) -- Task 12/13's UI counterpart
 
 ## 11. Wrap-up
-- [ ] Manual test: Browse -> multi-vendor cart -> checkout -> order -> order history; vendor sees only own order items
-- [ ] Lint + build check
-- [ ] Deploy + test live
-- [ ] Update Postman collection with cart/checkout/order endpoints
-- [ ] Update README with Day 3 summary
-- [ ] Sync root -> week6/Day3 snapshot, commit, push
+- [x] Manual test: Browse -> multi-vendor cart -> checkout -> order -> order history; vendor sees only own order items (26 automated browser checks + full Day 1/Day 2 regression)
+- [x] Lint + build check
+- [ ] Deploy + test live (pending push)
+- [x] Update Postman collection with cart/checkout/order endpoints
+- [x] Update README with Day 3 summary
+- [x] Sync root -> week6/Day3 snapshot, commit, push

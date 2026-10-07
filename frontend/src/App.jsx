@@ -11,7 +11,13 @@ import MarketplaceLayout from "./components/marketplace/MarketplaceLayout";
 import ProductsPage from "./pages/marketplace/ProductsPage";
 import ProductDetailPage from "./pages/marketplace/ProductDetailPage";
 import VendorStorePage from "./pages/marketplace/VendorStorePage";
+import CartPage from "./pages/cart/CartPage";
+import CheckoutPage from "./pages/checkout/CheckoutPage";
+import OrdersPage from "./pages/orders/OrdersPage";
+import OrderDetailPage from "./pages/orders/OrderDetailPage";
 import { ROLES } from "./constants/roles";
+
+const ANY_ROLE = Object.values(ROLES);
 
 function App() {
   return (
@@ -25,6 +31,15 @@ function App() {
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/vendor/:id" element={<VendorStorePage />} />
+
+        {/* Shopping flow: any authenticated role (Day 1's RBAC table allows
+            "Place orders" for Customer, Vendor and Admin alike). */}
+        <Route element={<ProtectedRoute allowedRoles={ANY_ROLE} />}>
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders/:id" element={<OrderDetailPage />} />
+        </Route>
       </Route>
 
       <Route element={<ProtectedRoute allowedRoles={[ROLES.CUSTOMER]} />}>

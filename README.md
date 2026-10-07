@@ -35,6 +35,11 @@ backend/
     Vendor.js              One store per user, status PENDING/APPROVED/SUSPENDED/REJECTED
     Category.js            Unique name + slug
     Product.js              Belongs to a vendor and a category; auto DRAFT<->ACTIVE<->OUT_OF_STOCK
+    Cart.js, CartItem.js    One cart per user; one row per product in that cart (unique index)
+    Order.js, OrderItem.js  OrderItem snapshots productName/unitPrice; carries its own fulfillment status
+  services/
+    cartService.js          Builds the cart response (vendor-grouped, with per-item availability issues)
+    orderService.js         Checkout (the transaction), status-transition rules, order DTOs
   utils/slugify.js, uniqueSlug.js   URL-friendly slugs; products get a random suffix to avoid clashes
   validators/             Request validation rules, one file per resource
   middleware/
@@ -42,21 +47,26 @@ backend/
     auth.js                authenticate (401) and requireRole (403)
     loadVendor.js           Loads the caller's store, 403s if it isn't APPROVED
     errorHandler.js         Central error handler (also maps duplicate keys and bad ids to 409/400)
-  controllers/, routes/   One pair per resource: auth, vendors, admin vendor management,
-                          categories, vendor's own products, the public product catalog
+  controllers/, routes/   One pair per resource: auth, vendors, admin vendor management, categories,
+                          vendor's own products, the public product catalog, cart, checkout,
+                          customer orders, vendor orders
   scripts/seed.js         Creates the demo vendor (with an APPROVED store) and admin
 
 frontend/src/
   lib/api.js, format.js   One function for every API call; price/date/stock formatting
   hooks/useApi.js         Generic GET hook: loading/error/data + a reload() for after a mutation
-  context/, hooks/        Auth state: AuthProvider and useAuth()
+  context/, hooks/        Auth state (AuthProvider/useAuth) and cart state (CartProvider/useCart)
   components/routing/    ProtectedRoute and GuestRoute
-  components/ui/         TextField, Select, TextArea, Button, Modal, Badge, Alert, Spinner...
+  components/ui/         TextField, Select, TextArea, Button, Modal, Badge, Alert, Spinner,
+                          QuantityStepper...
   components/dashboard/  Layout, sidebar and dashboard widgets
   components/marketplace/ Public header/layout, product card, filters, pagination
-  components/vendor/     Become-a-vendor form, product add/edit modal, product table row
+  components/vendor/     Become-a-vendor form, product add/edit modal, product table row,
+                          vendor order-management panel
   components/admin/      Vendor application review, category CRUD
-  pages/                 Login, Register, three role dashboards, and the public marketplace pages
+  components/cart/, components/orders/   Cart item row; the reusable recent-orders list
+  pages/                 Login, Register, three role dashboards, the public marketplace pages,
+                          cart, checkout, and order history/detail
 ```
 
 ## Running locally
@@ -127,8 +137,18 @@ npm run dev             # http://localhost:5173
 | DELETE | `/api/vendor/products/:id` | VENDOR, approved store | Archive (soft delete) your own product |
 | GET | `/api/products` | Public | Active products only. `?search=&category=&vendor=&minPrice=&maxPrice=&sort=&page=&limit=` |
 | GET | `/api/products/:id` | Public | One active product, with its vendor and category |
+| GET | `/api/cart` | Logged in | The caller's cart, grouped by vendor, with per-item `issue` warnings |
+| POST | `/api/cart/items` | Logged in | Add a product (merges into the existing row if it's already there) |
+| PATCH | `/api/cart/items/:id` | Logged in | Change an item's quantity |
+| DELETE | `/api/cart/items/:id` | Logged in | Remove an item |
+| POST | `/api/checkout` | Logged in | Re-validates the whole cart and creates the order, atomically |
+| GET | `/api/orders` | Logged in | The caller's own orders |
+| GET | `/api/orders/:id` | Logged in | One of the caller's own orders, with its items |
+| GET | `/api/vendor/orders` | VENDOR, approved store | Orders containing this vendor's products, **their items only** |
+| GET | `/api/vendor/orders/:id` | VENDOR, approved store | Same scoping, for one order |
+| PATCH | `/api/vendor/orders/:id/status` | VENDOR, approved store | Advance or cancel this vendor's segment of the order |
 
-Protected requests send `Authorization: Bearer <token>`.
+Protected requests send `Authorization: Bearer <token>`. Cart, checkout and orders are open to any authenticated role (Customer, Vendor or Admin) -- there's no `requireRole` on them, matching Day 1's RBAC table, which allows "Place orders" for all three.
 
 **Status codes used consistently:**
 
@@ -209,7 +229,7 @@ Backend and frontend are separate Vercel projects from the same repository (root
 - There is no rate limiting on login yet.
 - Tokens cannot be revoked before they expire (see "Logout").
 - Login answers slightly faster for an unregistered email, because no password hash is checked. This small timing difference could hint which emails exist.
-- Dashboard sections for orders and payments are still placeholders, marked "Soon". Products are no longer a placeholder as of Day 2 (see below).
+- Dashboard sections for payments are still placeholders, marked "Soon". Products (Day 2) and orders (Day 3) are no longer placeholders -- see below.
 
 ---
 
@@ -228,7 +248,7 @@ Backend and frontend are separate Vercel projects from the same repository (root
 - `loadVendor` middleware and the `CastError` → 400 fix (see "Key decisions") are shared across every resource added this day.
 
 **Frontend**
-- Public marketplace, reachable with or without logging in: `/products` (search, category, price range and sort filters that update the list without a page reload, via URL query params so a filtered view is shareable and survives a refresh), `/products/:id` (gallery, description, stock, a disabled "Add to Cart" wired up on Day 3), and `/vendor/:id` (a store page listing that vendor's products).
+- Public marketplace, reachable with or without logging in: `/products` (search, category, price range and sort filters that update the list without a page reload, via URL query params so a filtered view is shareable and survives a refresh), `/products/:id` (gallery, description, stock, an "Add to Cart" that was wired up on Day 3), and `/vendor/:id` (a store page listing that vendor's products).
 - A "Become a vendor" card on the customer dashboard: an application form if the customer has none yet, or their current status and what it means if they do.
 - The vendor dashboard now shows real data: store status (with a plain-English explanation when it's not `APPROVED`), product counts, and -- once approved -- a product table with add/edit (a shared modal), inline stock editing, and archive. Pending or suspended vendors see their status and nothing to manage, since there's nothing to manage yet.
 - The admin dashboard gained a vendor-applications panel (tabs by status, approve/reject/suspend buttons that only show where they make sense) and a categories panel (create, inline edit, delete).
@@ -272,3 +292,57 @@ Testing `/api/admin/vendors/abc` (a non-id string, not a 404-shaped id) turned u
 - The vendor product form accepts image URLs as a comma-separated field rather than a real upload; there's no image hosting in this project yet.
 - Search matches `name` and `description` with a case-insensitive substring regex, not a text index -- fine at this scale, would want `$text` or a real search service at catalog sizes in the thousands.
 - Local development and the live site still share one Atlas database (see Day 1), so Day 2 testing was done directly against the shared data and cleaned up with a script afterward rather than against an isolated test database.
+
+---
+
+## Day 3: Shopping cart, multi-vendor checkout and order management
+
+### What was built
+
+**Backend**
+- `Cart` (one per user) and `CartItem` (one row per product, a unique index on `cart + product` backs up the "merge instead of duplicate" rule at the database level, not just in the controller).
+- Cart endpoints re-check the product on every add/update: it must exist, be `ACTIVE`, belong to an `APPROVED` vendor, and have enough stock. `GET /cart` returns items grouped by vendor with subtotals, and flags any item that's gone stale (vendor suspended, stock dropped below what's in the cart) with a plain-English `issue` instead of silently fixing or hiding it.
+- `POST /api/checkout` re-validates the entire cart a second time -- fresh from the database, inside a MongoDB transaction -- before creating anything. If the cart is empty, or any item fails (deleted, no longer active, vendor no longer approved, not enough stock), the whole request fails with a 400 and a per-item `errors` list; nothing is created and nothing changes. On success, in the same transaction: the `Order` and its `OrderItem`s are created, each purchased product's stock is decremented (which can trigger the same `OUT_OF_STOCK` auto-flip from Day 2), and the cart is emptied.
+- `Order` stores the totals (`subtotal`, `shippingAmount`, `discountAmount`, `taxAmount`, `totalAmount` -- the last three are `0` for now, ready for Day 4). `OrderItem` stores a snapshot of `productName` and `unitPrice` at purchase time, plus the `vendor` reference and its own fulfillment `status`.
+- Customers can list and view their own orders (`GET /api/orders`, `/api/orders/:id`); vendors can list and view only the order items that are theirs (`GET /api/vendor/orders`, `/api/vendor/orders/:id`) and advance or cancel their own segment's status (`PATCH /api/vendor/orders/:id/status`), with the transition sequentially enforced (no skipping steps, nothing after `DELIVERED` or `CANCELLED`).
+
+**Frontend**
+- A `CartProvider` (same shape as `AuthProvider`) holds the cart in memory for the whole session, so the header's cart icon shows a live item-count badge no matter which page you're on, without every page re-fetching it.
+- `/products/:id` now has a real quantity stepper and a working "Add to Cart" (a guest sees "Log in to add to cart" instead of a disabled button).
+- `/cart`: items grouped by vendor, a quantity stepper per item, remove, and a running subtotal; a "Proceed to checkout" button that's disabled while any item has an `issue`.
+- `/checkout`: the same vendor-grouped summary plus the subtotal/shipping/discount/tax/grand-total breakdown, a "Payment Method: Cash on Delivery" placeholder (Day 4 replaces this with a real gateway), and a "Place order" button that calls checkout and lands on the new order's detail page.
+- `/orders` and `/orders/:id`: order history and a full breakdown of one order, including each item's own status badge (so a mixed-progress multi-vendor order is visible to the customer, not just "Pending" or "Done").
+- The customer dashboard's "Recent orders" panel and the vendor dashboard's new "Orders" panel both now show real data -- the vendor's panel lets them advance or cancel their own segment directly from the dashboard, same place they manage products.
+
+### Key decisions and why
+
+**Checkout re-validates inside the transaction, not before it.**
+It would be simpler to check the cart, then separately create the order. But between those two steps another customer could buy the last unit of something in your cart, and you'd check out successfully for a product you can no longer have. Instead, `createOrderFromCart` opens a MongoDB session, and every check (exists, active, vendor approved, enough stock) happens on data read *inside* that same transaction, immediately before the order is written. If anything's wrong, the transaction aborts and nothing is created -- there's no window where a stale check can approve a purchase that's no longer valid.
+
+**A vendor can see an order exists without seeing what's in it for other vendors.**
+`GET /api/vendor/orders` doesn't query `Order` and filter client-side -- it queries `OrderItem` for `{ vendor: req.vendor._id }` directly, the same ownership-by-query pattern Day 2 used for products. A multi-vendor order is never assembled in memory with all its items and then trimmed down; the query simply never touches another vendor's rows. Tested directly: Vendor A's dashboard shows their product and a `vendorSubtotal` of just their line, and the same order on Vendor B's dashboard shows only theirs, with neither total matching the customer-facing order total.
+
+**The order's overall status is derived, not stored independently.**
+Instead of a customer-facing `Order.status` that a vendor sets directly, each `OrderItem` has its own status, and `Order.status` is recomputed from them: it's whichever status is *least* advanced among the non-cancelled items. A two-vendor order isn't "Shipped" until both vendors have shipped their part. This was a deliberate choice over the simpler "last update wins" approach, because that would let whichever vendor acts last silently overwrite the honest state of an order that isn't actually fully shipped yet.
+
+**A vendor's status change can only move one step forward, or cancel.**
+`isValidTransition` only allows `PENDING -> CONFIRMED -> PROCESSING -> SHIPPED -> DELIVERED` one step at a time, plus `CANCELLED` from any non-terminal state. A first version allowed suspending a vendor to also demote their role, independent of this -- testing caught that a *suspended* vendor would lose the `VENDOR` role needed to even load `/vendor/orders`, making their in-flight orders permanently stuck with no one able to act on them. That's accepted here as a known limitation (same shape as Day 2's: `loadVendor` already blocks a non-`APPROVED` vendor from managing anything, orders included) rather than fixed, since re-approving restores full access to exactly where things were left off.
+
+**Cart issues are surfaced, never silently resolved.**
+If a product in your cart gets suspended or its stock drops, `GET /cart` keeps showing the item with its last known quantity and price, plus an `issue` string explaining what's wrong -- it does not auto-remove the item or clamp the quantity down for you. The "Proceed to checkout" button is disabled while any `issue` exists, so you always know what changed before you're asked to act on it, and checkout's own re-validation is the actual enforcement either way.
+
+**`localStorage`-based auth meant cart state needed its own provider, not a prop.**
+The cart icon badge lives in the header, which sits above every page including ones that never otherwise touch cart data (like `/admin`). Threading cart state down as props through `MarketplaceLayout` wouldn't reach it. `CartProvider` mirrors `AuthProvider`'s pattern exactly -- an effect that fetches once per token change, reacting only inside `.then()`, never calling `setState` synchronously in the effect body -- so the two providers behave identically and either can be reasoned about using the same mental model.
+
+### Testing done
+
+- **API:** the full cart lifecycle (add, merge, exceed-stock rejection, update, remove, ownership -- another user's cart item is a 404), checkout success (order created, stock decremented via the same transaction, cart cleared) and checkout failure (cart emptied mid-flight by suspending a vendor: confirmed the stock was *not* touched, no order was created, and the cart still had its item afterward). The multi-vendor isolation was checked directly: Vendor A and Vendor B each queried the same order and only ever saw their own product. Status transitions were tested for every case the rule covers: skipping a step (400), sequential moves (200), and anything after `DELIVERED` or `CANCELLED` (400). A security pass also checked that sending objects (`{"$gt": 0}`-shaped payloads) as `productId` or `quantity` is rejected by validation before it ever reaches a database query.
+- **Browser:** 26 automated end-to-end checks in Microsoft Edge covering a guest being redirected away from `/cart`, `/checkout` and `/orders`; adding products from two different vendors and watching the header badge update; the cart page's vendor grouping and quantity updates recalculating the subtotal; checkout showing both vendors and the Cash on Delivery placeholder; landing on the new order after placing it with the cart badge cleared; the order showing up in both the orders list and the customer dashboard; and each vendor's dashboard showing only their own line from the same multi-vendor order, with one vendor successfully advancing their segment's status. The full Day 1 (26 checks) and Day 2 (30 checks) suites were re-run afterward with no regressions.
+- `npm run lint` and `npm run build` pass for the frontend.
+
+### Known limitations
+
+- A suspended vendor cannot act on orders they already have in progress (see "Key decisions" -- same shape as Day 2's product-management gate, not fixed for the same reason).
+- `POST /api/checkout` requires MongoDB to be running as a replica set (what MongoDB Atlas always provides, including the free tier) -- transactions aren't available against a plain standalone `mongod`.
+- Once rejected or cancelled, there's no appeal or reorder flow yet; a cancelled item's status is final from the app's point of view.
+- Shipping, discount and tax are always `0` -- the fields and the UI breakdown exist, but the actual calculation logic is Day 4 scope.

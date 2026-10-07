@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
-import { Package, ShoppingBag } from 'lucide-react'
+import { ShoppingBag } from 'lucide-react'
 import { ROLE_CONFIG } from '../../constants/roleConfig'
-import { AccountStats, EmptyState, HeroBanner, Panel, PermissionsPanel } from '../../components/dashboard/widgets'
+import { AccountStats, HeroBanner, Panel, PermissionsPanel } from '../../components/dashboard/widgets'
 import BecomeVendorCard from '../../components/vendor/BecomeVendorCard'
+import RecentOrdersList from '../../components/orders/RecentOrdersList'
 
 function CustomerDashboard({ user }) {
   const config = ROLE_CONFIG[user.role]
@@ -29,13 +30,7 @@ function CustomerDashboard({ user }) {
               Discover products from every approved vendor on the platform.
             </p>
           </Panel>
-          <Panel title="Recent orders">
-            <EmptyState
-              icon={Package}
-              title="No orders yet"
-              text="When you place an order, it will show up here with its status."
-            />
-          </Panel>
+          <RecentOrdersList />
         </div>
         <div className="space-y-5 lg:col-span-2">
           <BecomeVendorCard />

@@ -35,8 +35,8 @@ export const ROLE_CONFIG = {
     nav: [
       { label: 'Overview', icon: LayoutDashboard, active: true },
       { label: 'Browse products', icon: ShoppingBag, to: '/products' },
-      { label: 'Cart', icon: ShoppingCart },
-      { label: 'My orders', icon: Package },
+      { label: 'Cart', icon: ShoppingCart, to: '/cart' },
+      { label: 'My orders', icon: Package, to: '/orders' },
     ],
   },
   [ROLES.VENDOR]: {
@@ -49,8 +49,8 @@ export const ROLE_CONFIG = {
     navSection: 'Store',
     nav: [
       { label: 'Overview', icon: LayoutDashboard, active: true },
-      { label: 'My products', icon: Boxes },
-      { label: 'Orders', icon: Package },
+      { label: 'My products', icon: Boxes, to: '/vendor#products' },
+      { label: 'Orders', icon: Package, to: '/vendor#orders' },
       { label: 'Earnings', icon: BarChart3 },
     ],
   },
