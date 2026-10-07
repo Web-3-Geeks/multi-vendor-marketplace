@@ -101,3 +101,56 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] Postman collection file with all endpoints
 - [x] Update README with Day 2 summary
 - [x] Sync root -> week6/Day2 snapshot, commit, push
+
+# Week 6 - Day 3 Plan: Shopping Cart, Multi-Vendor Cart & Order Management
+
+## 1. Cart Model & Add to Cart
+- [x] Cart model (userId, timestamps) - one active cart per user
+- [x] CartItem model (cartId, productId, quantity, timestamps) - no duplicate product per cart, quantity > 0
+- [x] POST /api/cart/items (product must exist, ACTIVE, vendor APPROVED, quantity <= stock; increase qty if already in cart)
+
+## 2. View / Update / Remove Cart Items
+- [x] GET /api/cart (product info, image, vendor, unit price, qty, item subtotal, cart subtotal, item count - prices from DB only)
+- [x] PATCH /api/cart/items/:id (re-validate product/vendor/stock on every update)
+- [x] DELETE /api/cart/items/:id (ownership check, 404 if not found, recompute totals)
+
+## 3. Cart Calculation Service
+- [x] Centralized calculator: item subtotal, cart subtotal
+- [x] Structure ready for shipping/discount/tax/grand total (Day 4+)
+- [x] Multi-vendor grouping in the response
+
+## 4. Checkout Validation
+- [x] POST /api/checkout - re-check everything server-side (exists, ACTIVE, vendor APPROVED, stock, DB prices)
+- [x] Fail safely as one unit if anything is invalid, no partial order
+
+## 5. Order & OrderItem Models + Creation
+- [x] Order model (userId, status enum [PENDING/CONFIRMED/PROCESSING/SHIPPED/DELIVERED/CANCELLED], subtotal/shipping/discount/tax/total, timestamps)
+- [x] OrderItem model (orderId, productId, vendorId, productName + unitPrice snapshot, quantity, subtotal)
+- [x] Create order from validated cart, reduce stock, clear cart - as one atomic operation (Mongo transaction)
+
+## 6. Customer Order APIs
+- [x] GET /api/orders (own orders only)
+- [x] GET /api/orders/:id (ownership check, 404 not 403 for others' orders)
+
+## 7. Vendor Order Access & Status
+- [x] GET /api/vendor/orders (only order items for this vendor's products)
+- [x] GET /api/vendor/orders/:id (same scoping)
+- [x] PATCH /api/vendor/orders/:id/status (own items only, validate allowed transitions)
+
+## 8. Cart Frontend
+- [ ] /cart page (image, name, vendor, price, qty controls, subtotal, remove, cart subtotal, checkout button)
+- [ ] No full page reload on qty change; loading states; stock error messages; empty cart state
+
+## 9. Checkout Page
+- [ ] /checkout (items, vendor info, qty, prices, subtotal/shipping/discount/tax/grand total, placeholder payment = Cash on Delivery)
+
+## 10. Customer Orders UI
+- [ ] /orders (history list) and /orders/:id (detail: items, vendors, totals, status, date)
+
+## 11. Wrap-up
+- [ ] Manual test: Browse -> multi-vendor cart -> checkout -> order -> order history; vendor sees only own order items
+- [ ] Lint + build check
+- [ ] Deploy + test live
+- [ ] Update Postman collection with cart/checkout/order endpoints
+- [ ] Update README with Day 3 summary
+- [ ] Sync root -> week6/Day3 snapshot, commit, push

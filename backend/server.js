@@ -8,6 +8,10 @@ const adminVendorRoutes = require("./routes/adminVendorRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const vendorProductRoutes = require("./routes/vendorProductRoutes");
 const publicProductRoutes = require("./routes/publicProductRoutes");
+const cartRoutes = require("./routes/cartRoutes");
+const checkoutRoutes = require("./routes/checkoutRoutes");
+const orderRoutes = require("./routes/orderRoutes");
+const vendorOrderRoutes = require("./routes/vendorOrderRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const dotenv = require("dotenv");
 
@@ -43,6 +47,14 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/vendor/products", vendorProductRoutes);
 
 app.use("/api/products", publicProductRoutes);
+
+app.use("/api/cart", cartRoutes);
+
+app.use("/api/checkout", checkoutRoutes);
+
+app.use("/api/orders", orderRoutes);
+
+app.use("/api/vendor/orders", vendorOrderRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });

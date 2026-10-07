@@ -1,0 +1,82 @@
+const OrderItem = require("../models/OrderItem");
+const { round2, isValidTransition, recomputeOrderStatus } = require("../services/orderService");
+
+// Groups this vendor's order items by order, with a subtotal computed only
+// from their own items -- never the whole (possibly multi-vendor) order total.
+const groupByOrder = (items) => {
+  const grouped = new Map();
+  for (const item of items) {
+    const key = String(item.order._id);
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        orderId: item.order._id,
+        orderStatus: item.order.status,
+        orderCreatedAt: item.order.createdAt,
+        items: [],
+        vendorSubtotal: 0,
+      });
+    }
+    const group = grouped.get(key);
+    group.items.push({
+      id: item._id,
+      productName: item.productName,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      subtotal: item.subtotal,
+      status: item.status,
+    });
+    group.vendorSubtotal = round2(group.vendorSubtotal + item.subtotal);
+  }
+  return Array.from(grouped.values());
+};
+
+const listVendorOrders = async (req, res) => {
+  const items = await OrderItem.find({ vendor: req.vendor._id })
+    .populate("order", "status createdAt")
+    .sort({ createdAt: -1 });
+
+  res.json({ orders: groupByOrder(items) });
+};
+
+const getVendorOrder = async (req, res) => {
+  const items = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
+    "order",
+    "status createdAt",
+  );
+
+  if (items.length === 0) {
+    return res.status(404).json({ message: "Order not found" });
+  }
+
+  res.json({ order: groupByOrder(items)[0] });
+};
+
+const updateVendorOrderStatus = async (req, res) => {
+  const { status } = req.body;
+
+  const items = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id });
+  if (items.length === 0) {
+    return res.status(404).json({ message: "Order not found" });
+  }
+
+  const invalid = items.find((item) => !isValidTransition(item.status, status));
+  if (invalid) {
+    return res.status(400).json({
+      message: `Cannot move an item from ${invalid.status} to ${status}`,
+    });
+  }
+
+  await OrderItem.updateMany(
+    { vendor: req.vendor._id, order: req.params.id },
+    { status },
+  );
+  await recomputeOrderStatus(req.params.id);
+
+  const updated = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
+    "order",
+    "status createdAt",
+  );
+  res.json({ order: groupByOrder(updated)[0] });
+};
+
+module.exports = { listVendorOrders, getVendorOrder, updateVendorOrderStatus };
