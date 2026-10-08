@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Banknote, Store } from 'lucide-react'
+import { CreditCard, Store } from 'lucide-react'
 import { useCart } from '../../hooks/useCart'
 import { useAuth } from '../../hooks/useAuth'
 import { apiRequest } from '../../lib/api'
@@ -24,7 +24,7 @@ function CheckoutPage() {
     try {
       const data = await apiRequest('/checkout', { method: 'POST', token })
       await refresh()
-      navigate(`/orders/${data.order.id}`, { replace: true })
+      navigate(`/pay/${data.order.id}`, { replace: true })
     } catch (err) {
       setItemErrors(err.errors || [])
       setFormError(err.message)
@@ -123,14 +123,15 @@ function CheckoutPage() {
           </dl>
 
           <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-            <Banknote aria-hidden="true" className="size-4 shrink-0 text-slate-400" />
+            <CreditCard aria-hidden="true" className="size-4 shrink-0 text-slate-400" />
             <span>
-              Payment method: <span className="font-medium text-slate-900">Cash on Delivery</span>
+              Payment method: <span className="font-medium text-slate-900">Card</span>
+              <span className="block text-xs text-slate-500">You'll pay securely on the next step.</span>
             </span>
           </div>
 
           <Button onClick={handlePlaceOrder} loading={placing} disabled={cart.hasIssues}>
-            Place order
+            Place order &amp; continue to payment
           </Button>
         </aside>
       </div>

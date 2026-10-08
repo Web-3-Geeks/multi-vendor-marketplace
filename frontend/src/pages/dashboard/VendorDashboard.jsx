@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useState } from 'react'
 import { Boxes, Plus, TriangleAlert } from 'lucide-react'
 import { ROLE_CONFIG } from '../../constants/roleConfig'
 import { VENDOR_STATUS, VENDOR_STATUS_MESSAGE, VENDOR_STATUS_TONE, readableStatus } from '../../constants/status'
 import { useApi } from '../../hooks/useApi'
 import { useAuth } from '../../hooks/useAuth'
+import { useScrollToHash } from '../../hooks/useScrollToHash'
 import { apiRequest } from '../../lib/api'
 import { AccountStats, EmptyState, HeroBanner, Panel, PermissionsPanel } from '../../components/dashboard/widgets'
 import Badge from '../../components/ui/Badge'
@@ -14,6 +14,7 @@ import Alert from '../../components/ui/Alert'
 import VendorProductRow from '../../components/vendor/VendorProductRow'
 import ProductFormModal from '../../components/vendor/ProductFormModal'
 import VendorOrdersPanel from '../../components/vendor/VendorOrdersPanel'
+import VendorEarningsPanel from '../../components/vendor/VendorEarningsPanel'
 
 function VendorDashboard({ user }) {
   const config = ROLE_CONFIG[user.role]
@@ -78,18 +79,8 @@ function VendorDashboard({ user }) {
     }
   }
 
-  const location = useLocation()
-
-  // Sidebar links to "My products" / "Orders" point here as #hash anchors --
-  // there's no separate route for them, everything lives on this one page.
-  // React Router doesn't scroll to a hash on its own (it only updates the URL),
-  // so this does it by hand whenever the hash changes, including clicking the
-  // same link again while already on this page.
-  useEffect(() => {
-    if (!location.hash) return
-    const el = document.getElementById(location.hash.slice(1))
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [location.hash, storeLoading])
+  // Sidebar links to "My products" / "Orders" / "Earnings" are #hash anchors on this one page.
+  useScrollToHash(!storeLoading)
 
   if (storeLoading) return <Spinner label="Loading your store..." />
 
@@ -185,6 +176,13 @@ function VendorDashboard({ user }) {
               </div>
             )}
           </Panel>
+        </>
+      )}
+
+      {isApproved && (
+        <>
+          <div id="earnings" className="scroll-mt-20" />
+          <VendorEarningsPanel />
         </>
       )}
 

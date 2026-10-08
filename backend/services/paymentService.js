@@ -25,6 +25,7 @@ const toPaymentDTO = (payment) => ({
   status: payment.status,
   amount: payment.amount,
   currency: payment.currency,
+  provider: payment.provider,
   transactionId: payment.transactionId,
   paymentMethod: payment.paymentMethod,
   expiresAt: payment.expiresAt,
@@ -333,9 +334,15 @@ const refundPayment = async (adminId, paymentId, reason) => {
     .populate("order", "status paymentStatus totalAmount");
 };
 
+const getLatestPaymentForOrder = async (userId, orderId) => {
+  const payment = await Payment.findOne({ order: orderId, user: userId }).sort({ createdAt: -1 });
+  return payment ? toPaymentDTO(payment) : null;
+};
+
 module.exports = {
   PaymentError,
   toPaymentDTO,
+  getLatestPaymentForOrder,
   toAdminPaymentDTO,
   createPaymentForOrder,
   verifyPayment,

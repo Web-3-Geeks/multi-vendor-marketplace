@@ -15,6 +15,7 @@ import CartPage from "./pages/cart/CartPage";
 import CheckoutPage from "./pages/checkout/CheckoutPage";
 import OrdersPage from "./pages/orders/OrdersPage";
 import OrderDetailPage from "./pages/orders/OrderDetailPage";
+import PaymentPage from "./pages/payment/PaymentPage";
 import { ROLES } from "./constants/roles";
 
 const ANY_ROLE = Object.values(ROLES);
@@ -39,6 +40,7 @@ function App() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/orders/:id" element={<OrderDetailPage />} />
+          <Route path="/pay/:orderId" element={<PaymentPage />} />
         </Route>
       </Route>
 

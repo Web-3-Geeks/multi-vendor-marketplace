@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { ChevronRight, Package } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { formatDate, formatPrice } from '../../lib/format'
-import { ORDER_STATUS_TONE, readableStatus } from '../../constants/status'
+import { ORDER_STATUS_TONE, PAYMENT_STATUS_TONE, orderPaymentLabel, readableStatus } from '../../constants/status'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
@@ -49,6 +49,7 @@ function OrdersPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <Badge tone={ORDER_STATUS_TONE[order.status]}>{readableStatus(order.status)}</Badge>
+                  <Badge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>{orderPaymentLabel(order.paymentStatus)}</Badge>
                   <p className="w-20 text-right text-sm font-semibold">{formatPrice(order.totalAmount)}</p>
                   <ChevronRight aria-hidden="true" className="size-4 text-slate-300" />
                 </div>

@@ -2,7 +2,14 @@ import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft, Store } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { formatDate, formatPrice } from '../../lib/format'
-import { ORDER_STATUS_TONE, readableStatus } from '../../constants/status'
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_TONE,
+  PAYMENT_STATUS,
+  PAYMENT_STATUS_TONE,
+  orderPaymentLabel,
+  readableStatus,
+} from '../../constants/status'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
@@ -38,6 +45,9 @@ function OrderDetailPage() {
 
   const order = data.order
   const groups = groupByVendor(order.items)
+  const payable =
+    order.status !== ORDER_STATUS.CANCELLED &&
+    [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED].includes(order.paymentStatus)
 
   return (
     <div className="space-y-5">
@@ -56,7 +66,18 @@ function OrderDetailPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-500">Placed {formatDate(order.createdAt)}</p>
         </div>
-        <Badge tone={ORDER_STATUS_TONE[order.status]}>{readableStatus(order.status)}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={ORDER_STATUS_TONE[order.status]}>{readableStatus(order.status)}</Badge>
+          <Badge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>{orderPaymentLabel(order.paymentStatus)}</Badge>
+          {payable && (
+            <Link
+              to={`/pay/${order.id}`}
+              className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
+            >
+              Pay now
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">

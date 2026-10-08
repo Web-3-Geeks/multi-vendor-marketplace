@@ -191,16 +191,16 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] Security/correctness pass: no card data, no secrets in responses/logs, server-side amounts, ownership, signature, idempotency, unauthorized refunds
 
 ## 6. Frontend
-- [ ] Payment page (order summary, amount, method, status states: pending/processing/success/failed/cancelled, loading)
-- [ ] Success only after backend verification (never from redirect)
-- [ ] Vendor earnings dashboard (cards + earnings table)
-- [ ] Admin dashboard (stat cards + quick links to Orders/Payments/Vendors/Products/Categories)
-- [ ] Admin orders + payments pages (list, filters, detail, refund)
+- [x] Payment page (order summary, amount, method, status states: pending/processing/success/failed/cancelled, loading)
+- [x] Success only after backend verification (never from redirect)
+- [x] Vendor earnings dashboard (cards + earnings table)
+- [x] Admin dashboard (stat cards + quick links to Orders/Payments/Vendors/Products/Categories)
+- [x] Admin orders + payments pages (list, filters, detail, refund)
 
 ## 7. Wrap-up
 - [ ] Manual/automated test: order -> pay -> verified -> CONFIRMED; vendor earnings; admin views + refund; full Day 1-3 regression
-- [ ] Lint + build check
+- [x] Lint + build check
 - [x] Postman collection: Day 4 folders (payments, vendor earnings, admin payments/orders/stats)
-- [ ] README: Day 4 section + endpoint table + structure
-- [ ] Sync root -> week6/Day4 snapshot + snapshot index row
+- [x] README: Day 4 section + endpoint table + structure
+- [x] Sync root -> week6/Day4 snapshot + snapshot index row
 - [ ] Deploy + test live (pending push)

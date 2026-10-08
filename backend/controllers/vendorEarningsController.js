@@ -23,6 +23,7 @@ const getSummary = async (vendorId) => {
     {
       $group: {
         _id: null,
+        salesCount: { $sum: 1 },
         totalSales: { $sum: "$grossAmount" },
         totalCommission: { $sum: "$commissionAmount" },
         netEarnings: { $sum: "$vendorAmount" },
@@ -34,6 +35,7 @@ const getSummary = async (vendorId) => {
 
   const value = (key) => round2(row?.[key] || 0);
   return {
+    salesCount: row?.salesCount || 0,
     totalSales: value("totalSales"),
     totalCommission: value("totalCommission"),
     netEarnings: value("netEarnings"),

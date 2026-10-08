@@ -29,7 +29,7 @@ This project is built one day at a time. Each day adds to the same codebase. Sna
 ```
 backend/
   server.js              App setup: CORS, JSON parsing, routes, 404, error handler, DB connection
-  constants/              Roles, vendor statuses, product statuses -- each in one place
+  constants/              Roles and the vendor/product/order/payment/commission statuses -- each in one place
   models/
     User.js               Password hashing, password comparison
     Vendor.js              One store per user, status PENDING/APPROVED/SUSPENDED/REJECTED
@@ -37,10 +37,17 @@ backend/
     Product.js              Belongs to a vendor and a category; auto DRAFT<->ACTIVE<->OUT_OF_STOCK
     Cart.js, CartItem.js    One cart per user; one row per product in that cart (unique index)
     Order.js, OrderItem.js  OrderItem snapshots productName/unitPrice; carries its own fulfillment status
+    Payment.js              One row per payment attempt; unique transactionId; refund details; processed webhook event ids
+    Commission.js           One row per order item: gross, rate (snapshot), commission, vendor amount, status
+    MockTransaction.js      The mock payment provider's own records (stands in for the provider's database)
   services/
     cartService.js          Builds the cart response (vendor-grouped, with per-item availability issues)
-    orderService.js         Checkout (the transaction), status-transition rules, order DTOs
+    orderService.js         Checkout (the transaction), status-transition rules, cancel + stock release, stale-order cleanup
+    paymentService.js       Create/verify/webhook/refund; the single settlePayment transaction behind verify AND webhook
+    commissionService.js    Reads COMMISSION_RATE, creates and updates commission rows
+    payment/                Provider interface (createIntent, retrieve, refund, verifyWebhook) + the mock provider
   utils/slugify.js, uniqueSlug.js   URL-friendly slugs; products get a random suffix to avoid clashes
+  utils/money.js, escapeRegex.js, dateRange.js   Rounding, safe regex search, from/to date filters
   validators/             Request validation rules, one file per resource
   middleware/
     validate.js            Returns 400 with per-field errors if validation fails
@@ -49,7 +56,8 @@ backend/
     errorHandler.js         Central error handler (also maps duplicate keys and bad ids to 409/400)
   controllers/, routes/   One pair per resource: auth, vendors, admin vendor management, categories,
                           vendor's own products, the public product catalog, cart, checkout,
-                          customer orders, vendor orders
+                          customer orders, vendor orders, payments, vendor earnings,
+                          admin payments, admin orders, admin stats
   scripts/seed.js         Creates the demo vendor (with an APPROVED store) and admin
 
 frontend/src/
@@ -62,11 +70,12 @@ frontend/src/
   components/dashboard/  Layout, sidebar and dashboard widgets
   components/marketplace/ Public header/layout, product card, filters, pagination
   components/vendor/     Become-a-vendor form, product add/edit modal, product table row,
-                          vendor order-management panel
-  components/admin/      Vendor application review, category CRUD
+                          vendor order-management panel, vendor earnings panel
+  components/admin/      Vendor application review, category CRUD, marketplace stats,
+                          orders panel, payments panel (with refund)
   components/cart/, components/orders/   Cart item row; the reusable recent-orders list
   pages/                 Login, Register, three role dashboards, the public marketplace pages,
-                          cart, checkout, and order history/detail
+                          cart, checkout, payment, and order history/detail
 ```
 
 ## Running locally
@@ -92,8 +101,15 @@ npm run dev             # http://localhost:5000
 | `JWT_SECRET` | Long random string used to sign tokens |
 | `FRONTEND_URL` | The only origin CORS allows, e.g. `http://localhost:5173` (no trailing slash) |
 | `BACKEND_URL` | The API's own base URL |
+| `PAYMENT_PROVIDER` | `mock` for development. Picks the provider in `services/payment/` |
+| `PAYMENT_PUBLIC_KEY` | Provider public key (safe to send to the browser) |
+| `PAYMENT_SECRET_KEY` | Provider secret key. Server only, never returned by any endpoint |
+| `PAYMENT_WEBHOOK_SECRET` | Shared secret used to sign and verify webhook calls. Use a long random string |
+| `COMMISSION_RATE` | Platform commission as a fraction, e.g. `0.10` for 10%. Defaults to `0.10` |
 | `SEED_ADMIN_PASSWORD` | Password for `admin@test.com`, used only by `npm run seed` |
 | `SEED_VENDOR_PASSWORD` | Password for `vendor@test.com`, used only by `npm run seed` |
+
+The server refuses to start if a required variable (including the four `PAYMENT_*` ones) is missing, or if `COMMISSION_RATE` is not between 0 and 1. Generate the webhook secret with `node -e "console.log('whsec_' + require('crypto').randomBytes(32).toString('hex'))"`.
 
 The seed script skips accounts that already exist, so it is safe to run more than once. To change a seeded password, delete that user and run the seed again.
 
@@ -147,6 +163,21 @@ npm run dev             # http://localhost:5173
 | GET | `/api/vendor/orders` | VENDOR, approved store | Orders containing this vendor's products, **their items only** |
 | GET | `/api/vendor/orders/:id` | VENDOR, approved store | Same scoping, for one order |
 | PATCH | `/api/vendor/orders/:id/status` | VENDOR, approved store | Advance or cancel this vendor's segment of the order |
+| POST | `/api/payments/create` | Logged in | Start (or resume) a payment for one of **your** orders. Only the order id is sent; the amount comes from the order |
+| GET | `/api/payments/order/:orderId` | Logged in | Your latest payment attempt for that order, or `{ payment: null }` |
+| POST | `/api/payments/verify` | Logged in | Asks the provider for the real status, checks amount + order, then settles the payment |
+| POST | `/api/payments/webhook` | Provider (signed) | Signature-verified, idempotent payment events. No login: the signature is the authentication |
+| POST | `/api/payments/mock/pay` | Logged in, `PAYMENT_PROVIDER=mock` only | Development stand-in for the customer paying on the provider's page |
+| GET | `/api/vendor/earnings` | VENDOR, approved store | Summary (sales, commission, net, paid, pending) + paginated history, `?status=&from=&to=&page=&limit=` |
+| GET | `/api/admin/payments` | ADMIN | List payments, `?search=` (transaction id) `&status=&from=&to=&page=&limit=` |
+| GET | `/api/admin/payments/:id` | ADMIN | One payment with its customer, order and items |
+| POST | `/api/admin/payments/:id/refund` | ADMIN | Provider refund, then marks payment/order/commissions. Body `{ reason? }` |
+| GET | `/api/admin/orders` | ADMIN | All orders, `?search=&status=&paymentStatus=&page=&limit=` |
+| GET | `/api/admin/orders/:id` | ADMIN | One order with customer, items and every payment attempt |
+| PATCH | `/api/admin/orders/:id/status` | ADMIN | Move a paid order forward one step, or cancel an unpaid one |
+| GET | `/api/admin/stats` | ADMIN | Dashboard totals: orders, paid/pending/failed, sales, commission, vendor earnings |
+
+The webhook is the one route that receives the raw, unparsed body, because its signature is computed over the exact bytes the provider sent.
 
 Protected requests send `Authorization: Bearer <token>`. Cart, checkout and orders are open to any authenticated role (Customer, Vendor or Admin) -- there's no `requireRole` on them, matching Day 1's RBAC table, which allows "Place orders" for all three.
 
@@ -346,3 +377,68 @@ The cart icon badge lives in the header, which sits above every page including o
 - `POST /api/checkout` requires MongoDB to be running as a replica set (what MongoDB Atlas always provides, including the free tier) -- transactions aren't available against a plain standalone `mongod`.
 - Once rejected or cancelled, there's no appeal or reorder flow yet; a cancelled item's status is final from the app's point of view.
 - Shipping, discount and tax are always `0` -- the fields and the UI breakdown exist, but the actual calculation logic is Day 4 scope.
+
+---
+
+## Day 4: Payments, order management and vendor commissions
+
+### What was built
+
+**Backend**
+- `Payment` (one row per attempt, never a card number or CVV), `Commission` (one row per order item) and `MockTransaction` (the mock provider's own records) models. `Order` gained a `paymentStatus`.
+- A provider interface in `services/payment/` with four functions: `createIntent`, `retrieve`, `refund`, `verifyWebhook`. The mock provider implements it with HMAC-SHA256 signed webhooks. Swapping in Stripe means writing one more file and changing `PAYMENT_PROVIDER`; nothing else changes. Credentials only come from environment variables.
+- `POST /api/payments/create`: the order must be yours (404 otherwise), not cancelled, and not already paid. The amount comes from the order in the database. Calling it again returns the same open payment, and a partial unique index (one open payment per order) backs that up when two requests race.
+- `POST /api/payments/verify` and `POST /api/payments/webhook` both end in one function, `settlePayment`, which runs in a single MongoDB transaction: payment `PAID`, order `CONFIRMED`, its items `CONFIRMED` and the commission rows created. A failed payment leaves the order `PENDING` so the customer can retry.
+- Commission = gross x `COMMISSION_RATE`, vendor amount = gross - commission, per order item, with the rate saved on every row. `GET /api/vendor/earnings` returns the summary plus date-filtered history, scoped to the caller's own store.
+- Admin: payments list and detail (search by transaction id, status and date filters), orders list, detail and status (search by customer, full id or the short `#id`), `POST /api/admin/payments/:id/refund`, and `GET /api/admin/stats`.
+- Cancelling an order now returns its stock. Unpaid orders older than 24 hours are cancelled lazily (see "Key decisions").
+
+**Frontend**
+- Checkout no longer says Cash on Delivery: placing an order opens `/pay/:orderId`, which shows the order summary, the amount payable, the method and the payment state (unpaid, pending, processing, successful, failed, expired or cancelled, refunded). The mock provider appears as a clearly labelled "Test mode" panel.
+- Order pages show a Paid/Unpaid badge and a "Pay now" link for unpaid orders.
+- Vendor dashboard: an Earnings panel (total sales, gross revenue, platform commission, net, pending, paid) with a filterable, paginated table.
+- Admin dashboard: marketplace stat cards, quick links, an Orders panel and a Payments panel with details and a refund dialog.
+
+### Key decisions and why
+
+**The payment page never believes the browser.**
+Success is shown only after the backend has said so. After a payment the page calls `/payments/verify` and then re-reads the order; `?status=success` in the URL does nothing (tested). The server follows the same rule: verify asks the provider for the real status and checks the amount and order against the database, and the webhook checks its data against the payment it names.
+
+**Verify and the webhook are two doors into one room.**
+A webhook can arrive late, twice or never, and the customer's browser can close mid-payment. So either path may settle a payment, and both call `settlePayment`. It claims the payment with `findOneAndUpdate({ status: open })` inside a transaction, so when verify and the webhook race, exactly one wins and the other finds nothing left to do. The webhook also records each event id on the payment, so replaying an event changes nothing.
+
+**Webhook signatures are checked over the raw body.**
+`express.raw` is mounted on the webhook path before `express.json`, because re-serialising parsed JSON would not reproduce the signed bytes. The comparison uses `timingSafeEqual`. An unknown or mismatching event is logged and answered with 200, so the provider stops retrying, but it changes nothing.
+
+**A paid order is cancelled by refunding it.**
+Admins can cancel unpaid orders directly (the stock goes back). A paid order must be refunded: the provider is asked first, then one transaction marks the payment `REFUNDED`, cancels the items that haven't been delivered (returning their stock) and marks the commissions `REFUNDED`. Refunds are full only, and refunding twice is a 409.
+
+**Commission status follows delivery.**
+There is no payout system, so "paid" and "pending" are defined by the order: a commission is `PENDING` once the customer has paid, and `PAID` when that item is `DELIVERED`. Cancelled and refunded rows stay in the history but are left out of every total.
+
+**Vendors cannot move an order nobody has paid for.**
+Day 3 let a vendor mark any order `CONFIRMED`. Now the vendor and admin status endpoints share one function that refuses to advance an unpaid order. This also fixed a Day 3 gap: cancelling an order never returned its stock.
+
+**Abandoned orders are cleaned up lazily.**
+Stock is reserved at checkout, so an order that is never paid would hold it forever, and Vercel serverless has no background worker. Instead, whenever someone checks out or an admin opens the order list or stats, unpaid orders older than 24 hours are cancelled and their stock is released. Orders from before payments existed have no `paymentStatus` and are never touched.
+
+**Late money is recorded, not lost.**
+If a payment arrives for an order that was already cancelled, the payment is still marked `PAID` (the order stays cancelled and no commission is created), so an admin can refund it.
+
+### Testing done
+
+- **Backend (local):** 247 automated checks, all passing. They cover Day 1-3 behaviour (auth and RBAC, vendors, categories, products, cart, checkout, orders), the whole payment lifecycle, webhook hardening (missing, wrong, wrong-length and tampered signatures, replays, late events), 6 parallel creates and 3 parallel refunds, commission amounts to the cent, vendor isolation, the 401/403/400/404 paths of every admin endpoint, regex-escaped and duplicate query params, and a scan that no response contains a secret.
+- **Browser:** 48 checks in Microsoft Edge: checkout to payment, a declined payment and retry, success only after verification, a fake success URL, another customer, cancelled and expired orders, a 375px mobile layout, the vendor earnings numbers and tabs, the admin stats, filters, details and refund, and no console errors.
+- **Postman:** the collection (new folders for payments, vendor earnings and the admin endpoints) was run with Newman against the real backend: 34 requests, 23 assertions, all passing.
+- Frontend `npm run lint` and `npm run build` pass, and a no-undef lint pass over the backend is clean.
+- Bugs found and fixed along the way: a 500 on an empty or non-JSON webhook body, a signed event with an object `transactionId` that matched an arbitrary payment (still stopped by later checks, now guarded), and a missing import that broke the new `/payments/order/:orderId` route.
+
+### Known limitations
+
+- **The mock provider is for development only.** With `PAYMENT_PROVIDER=mock`, any logged-in user can mark their own payment as paid, so a real deployment must switch to a real provider (a Stripe test-mode provider is the planned next step).
+- Refunds are full only. If the provider refunds but the database update then fails, it is logged for manual reconciliation but not retried automatically.
+- Webhook signatures carry no timestamp, so there is no replay window. Idempotency still makes a replay harmless.
+- A vendor can cancel an item of an already paid order. That voids their commission, but the money stays with the platform until an admin refunds the payment.
+- The cleanup of unpaid orders only runs when someone triggers it. In production this would be a scheduled job (for example a Vercel Cron Job).
+- Orders from before Day 4 (Cash on Delivery) show as "Unpaid", and because vendors can no longer advance unpaid orders, they cannot be progressed.
+- No rate limiting on login or payment endpoints.

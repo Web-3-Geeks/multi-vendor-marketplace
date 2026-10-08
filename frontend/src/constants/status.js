@@ -78,3 +78,38 @@ export const nextOrderStatus = (status) => {
   if (index === -1 || index === ORDER_STATUS_SEQUENCE.length - 1) return null
   return ORDER_STATUS_SEQUENCE[index + 1]
 }
+
+export const PAYMENT_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  PROCESSING: 'PROCESSING',
+  PAID: 'PAID',
+  FAILED: 'FAILED',
+  REFUNDED: 'REFUNDED',
+  CANCELLED: 'CANCELLED',
+})
+
+export const PAYMENT_STATUS_TONE = {
+  [PAYMENT_STATUS.PENDING]: 'slate',
+  [PAYMENT_STATUS.PROCESSING]: 'amber',
+  [PAYMENT_STATUS.PAID]: 'emerald',
+  [PAYMENT_STATUS.FAILED]: 'rose',
+  [PAYMENT_STATUS.REFUNDED]: 'indigo',
+  [PAYMENT_STATUS.CANCELLED]: 'slate',
+}
+
+// On an order, PENDING means nothing has been paid yet.
+export const orderPaymentLabel = (status) => (status === PAYMENT_STATUS.PENDING ? 'Unpaid' : readableStatus(status))
+
+export const COMMISSION_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  REFUNDED: 'REFUNDED',
+  CANCELLED: 'CANCELLED',
+})
+
+export const COMMISSION_STATUS_TONE = {
+  [COMMISSION_STATUS.PENDING]: 'amber',
+  [COMMISSION_STATUS.PAID]: 'emerald',
+  [COMMISSION_STATUS.REFUNDED]: 'indigo',
+  [COMMISSION_STATUS.CANCELLED]: 'slate',
+}

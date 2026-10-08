@@ -7,6 +7,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Store,
+  Tags,
   Users,
 } from 'lucide-react'
 import { ROLES } from './roles'
@@ -51,7 +52,7 @@ export const ROLE_CONFIG = {
       { label: 'Overview', icon: LayoutDashboard, active: true },
       { label: 'My products', icon: Boxes, to: '/vendor#products' },
       { label: 'Orders', icon: Package, to: '/vendor#orders' },
-      { label: 'Earnings', icon: BarChart3 },
+      { label: 'Earnings', icon: BarChart3, to: '/vendor#earnings' },
     ],
   },
   [ROLES.ADMIN]: {
@@ -64,10 +65,12 @@ export const ROLE_CONFIG = {
     navSection: 'Management',
     nav: [
       { label: 'Overview', icon: LayoutDashboard, active: true },
+      { label: 'Orders', icon: Package, to: '/admin#orders' },
+      { label: 'Payments', icon: CreditCard, to: '/admin#payments' },
+      { label: 'Vendors', icon: Store, to: '/admin#vendors' },
+      { label: 'Products', icon: Boxes, to: '/products' },
+      { label: 'Categories', icon: Tags, to: '/admin#categories' },
       { label: 'Users', icon: Users },
-      { label: 'Vendors', icon: Store },
-      { label: 'Products', icon: Boxes },
-      { label: 'Payments', icon: CreditCard },
     ],
   },
 }

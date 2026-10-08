@@ -12,3 +12,12 @@ export function stockInfo(stock) {
 }
 
 export const LOW_STOCK_THRESHOLD = 5
+
+export const formatDateTime = (iso) =>
+  new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })

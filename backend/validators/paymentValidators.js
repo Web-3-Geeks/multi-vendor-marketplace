@@ -1,4 +1,4 @@
-const { body } = require("express-validator");
+const { body, param } = require("express-validator");
 
 const createPaymentRules = [
   body("orderId").isMongoId().withMessage("A valid order ID is required"),
@@ -25,5 +25,7 @@ const simulatePaymentRules = [
 ];
 
 
-module.exports = { createPaymentRules, verifyPaymentRules, simulatePaymentRules };
+const orderPaymentRules = [param("orderId").isMongoId().withMessage("A valid order ID is required")];
+
+module.exports = { createPaymentRules, verifyPaymentRules, simulatePaymentRules, orderPaymentRules };
 

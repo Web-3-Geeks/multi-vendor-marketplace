@@ -1,5 +1,6 @@
 const {
   createPaymentForOrder,
+  getLatestPaymentForOrder,
   verifyPayment,
   handleWebhookEvent,
   simulateMockPayment,
@@ -10,6 +11,11 @@ const { getProvider } = require("../services/payment");
 const createPayment = async (req, res) => {
   const result = await createPaymentForOrder(req.user._id, req.body.orderId);
   res.status(201).json(result);
+};
+
+const getOrderPayment = async (req, res) => {
+  const payment = await getLatestPaymentForOrder(req.user._id, req.params.orderId);
+  res.json({ payment });
 };
 
 const verifyPaymentHandler = async (req, res) => {
@@ -34,6 +40,12 @@ const simulatePaymentHandler = async (req, res) => {
 };
 
 
-module.exports = { createPayment, verifyPaymentHandler, webhookHandler, simulatePaymentHandler };
+module.exports = {
+  createPayment,
+  getOrderPayment,
+  verifyPaymentHandler,
+  webhookHandler,
+  simulatePaymentHandler,
+};
 
 

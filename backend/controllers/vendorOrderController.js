@@ -11,6 +11,7 @@ const groupByOrder = (items) => {
       grouped.set(key, {
         orderId: item.order._id,
         orderStatus: item.order.status,
+        paymentStatus: item.order.paymentStatus,
         orderCreatedAt: item.order.createdAt,
         items: [],
         vendorSubtotal: 0,
@@ -32,7 +33,7 @@ const groupByOrder = (items) => {
 
 const listVendorOrders = async (req, res) => {
   const items = await OrderItem.find({ vendor: req.vendor._id })
-    .populate("order", "status createdAt")
+    .populate("order", "status paymentStatus createdAt")
     .sort({ createdAt: -1 });
 
   res.json({ orders: groupByOrder(items) });
@@ -41,7 +42,7 @@ const listVendorOrders = async (req, res) => {
 const getVendorOrder = async (req, res) => {
   const items = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
     "order",
-    "status createdAt",
+    "status paymentStatus createdAt",
   );
 
   if (items.length === 0) {
@@ -58,7 +59,7 @@ const updateVendorOrderStatus = async (req, res) => {
 
   const updated = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
     "order",
-    "status createdAt",
+    "status paymentStatus createdAt",
   );
   res.json({ order: groupByOrder(updated)[0] });
 };

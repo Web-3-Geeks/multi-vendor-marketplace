@@ -618,6 +618,38 @@
           }
         },
         {
+          "name": "Get latest payment for my order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const { payment } = pm.response.json();",
+                  "  if (payment) {",
+                  "    pm.collectionVariables.set('paymentId', payment.id);",
+                  "    pm.collectionVariables.set('transactionId', payment.transactionId);",
+                  "    pm.collectionVariables.set('paymentAmount', payment.amount);",
+                  "  }",
+                  "}",
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/order/{{orderId}}",
+            "description": "The newest payment attempt for one of your orders (what the payment page uses after a refresh), or `{ \"payment\": null }` if none has been started -- also what you get for someone else's order, so existence isn't leaked."
+          }
+        },
+        {
           "name": "Verify payment (provider is asked, not the browser)",
           "event": [
             {

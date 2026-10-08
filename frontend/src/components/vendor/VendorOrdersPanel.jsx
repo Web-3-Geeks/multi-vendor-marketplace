@@ -4,7 +4,13 @@ import { useApi } from '../../hooks/useApi'
 import { useAuth } from '../../hooks/useAuth'
 import { apiRequest } from '../../lib/api'
 import { formatDate, formatPrice } from '../../lib/format'
-import { ORDER_STATUS, ORDER_STATUS_TONE, nextOrderStatus, readableStatus } from '../../constants/status'
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_TONE,
+  PAYMENT_STATUS,
+  nextOrderStatus,
+  readableStatus,
+} from '../../constants/status'
 import { EmptyState, Panel } from '../dashboard/widgets'
 import Badge from '../ui/Badge'
 import Spinner from '../ui/Spinner'
@@ -52,7 +58,8 @@ function VendorOrdersPanel() {
         <ul className="space-y-3">
           {orders.map((order) => {
             const segmentStatus = order.items[0]?.status
-            const next = nextOrderStatus(segmentStatus)
+            const paid = order.paymentStatus === PAYMENT_STATUS.PAID
+            const next = paid ? nextOrderStatus(segmentStatus) : null
             const canCancel = segmentStatus !== ORDER_STATUS.DELIVERED && segmentStatus !== ORDER_STATUS.CANCELLED
             const busy = busyId === order.orderId
 
@@ -63,7 +70,10 @@ function VendorOrdersPanel() {
                     <p className="text-sm font-semibold">#{order.orderId.slice(-8).toUpperCase()}</p>
                     <p className="text-xs text-slate-500">{formatDate(order.orderCreatedAt)}</p>
                   </div>
-                  <Badge tone={ORDER_STATUS_TONE[segmentStatus]}>{readableStatus(segmentStatus)}</Badge>
+                  <div className="flex items-center gap-2">
+                    {!paid && segmentStatus !== ORDER_STATUS.CANCELLED && <Badge tone="amber">Awaiting payment</Badge>}
+                    <Badge tone={ORDER_STATUS_TONE[segmentStatus]}>{readableStatus(segmentStatus)}</Badge>
+                  </div>
                 </div>
 
                 <ul className="mb-3 space-y-1 text-sm text-slate-600">
