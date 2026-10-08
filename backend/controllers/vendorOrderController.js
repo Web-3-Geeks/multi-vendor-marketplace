@@ -1,5 +1,5 @@
 const OrderItem = require("../models/OrderItem");
-const { round2, isValidTransition, recomputeOrderStatus } = require("../services/orderService");
+const { round2, updateItemsStatus } = require("../services/orderService");
 
 // Groups this vendor's order items by order, with a subtotal computed only
 // from their own items -- never the whole (possibly multi-vendor) order total.
@@ -54,23 +54,7 @@ const getVendorOrder = async (req, res) => {
 const updateVendorOrderStatus = async (req, res) => {
   const { status } = req.body;
 
-  const items = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id });
-  if (items.length === 0) {
-    return res.status(404).json({ message: "Order not found" });
-  }
-
-  const invalid = items.find((item) => !isValidTransition(item.status, status));
-  if (invalid) {
-    return res.status(400).json({
-      message: `Cannot move an item from ${invalid.status} to ${status}`,
-    });
-  }
-
-  await OrderItem.updateMany(
-    { vendor: req.vendor._id, order: req.params.id },
-    { status },
-  );
-  await recomputeOrderStatus(req.params.id);
+  await updateItemsStatus(req.params.id, status, { vendorId: req.vendor._id });
 
   const updated = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
     "order",

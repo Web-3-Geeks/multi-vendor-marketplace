@@ -11,7 +11,7 @@ const getOrCreateCart = async (userId) => {
   return Cart.findOneAndUpdate(
     { user: userId },
     { $setOnInsert: { user: userId } },
-    { new: true, upsert: true },
+    { returnDocument: "after", upsert: true },
   );
 };
 

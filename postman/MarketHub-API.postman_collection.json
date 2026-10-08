@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "MarketHub API",
-    "description": "Multi-vendor marketplace API: auth, RBAC, vendor applications, categories, vendor product management, the public marketplace catalog, cart, checkout, and orders.\n\nSet `baseUrl` to your local (http://localhost:5000/api) or live backend URL. Login/register requests auto-save their token to the matching collection variable (token, adminToken, vendorToken) via a test script, so most other requests just reference {{token}} etc. directly.\n\nFor the Cart -> Checkout -> Orders flow: log in as the customer (`token`), add a couple of products from *different* vendors to the cart (so you get a real multi-vendor order), then checkout. For Vendor - Orders, log in as one of those products' vendors (`vendorToken`) -- you'll only ever see the order items that belong to that vendor, never the other vendor's lines from the same order.",
+    "description": "Multi-vendor marketplace API: auth, RBAC, vendor applications, categories, vendor product management, the public marketplace catalog, cart, checkout, orders, payments, vendor commissions/earnings, and admin payment/order management.\n\nSet `baseUrl` to your local (http://localhost:5000/api) or live backend URL. Login/register requests auto-save their token to the matching collection variable (token, adminToken, vendorToken) via a test script, so most other requests just reference {{token}} etc. directly.\n\nFor the Cart -> Checkout -> Orders flow: log in as the customer (`token`), add a couple of products from *different* vendors to the cart (so you get a real multi-vendor order), then checkout. For Vendor - Orders, log in as one of those products' vendors (`vendorToken`) -- you'll only ever see the order items that belong to that vendor, never the other vendor's lines from the same order.\n\nFor the payment flow: after Checkout, run Payments (Customer) -> Create payment, then either \"Mock: customer pays - success (webhook delivered)\" or the no-webhook variant followed by \"Verify payment\". Paying an order is what moves it from PENDING to CONFIRMED and creates the vendors' commissions; vendors cannot advance an unpaid order. To use the Webhook requests, set the `webhookSecret` collection variable to PAYMENT_WEBHOOK_SECRET from backend/.env (it is left empty on purpose). The Admin folders need `adminToken` (Auth -> Login as Admin).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -13,7 +13,14 @@
     { "key": "vendorApplicationId", "value": "" },
     { "key": "productId", "value": "" },
     { "key": "cartItemId", "value": "" },
-    { "key": "orderId", "value": "" }
+    { "key": "orderId", "value": "" },
+    { "key": "paymentId", "value": "" },
+    { "key": "transactionId", "value": "" },
+    { "key": "paymentAmount", "value": "" },
+    { "key": "webhookSecret", "value": "" },
+    { "key": "webhookEventId", "value": "" },
+    { "key": "webhookBody", "value": "" },
+    { "key": "webhookSignature", "value": "" }
   ],
   "item": [
     {
@@ -563,8 +570,699 @@
               { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
             ],
             "url": "{{baseUrl}}/vendor/orders/{{orderId}}/status",
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"CONFIRMED\"\n}" },
-            "description": "Only moves your own items. Allowed values: CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED. Must move forward one step at a time (PENDING -> CONFIRMED -> PROCESSING -> SHIPPED -> DELIVERED); CANCELLED is allowed from any non-terminal state. The order's overall status (visible to the customer) always reflects whichever vendor segment is the least far along."
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"PROCESSING\"\n}" },
+            "description": "Only moves your own items, and only once the order is PAID (400 \"not been paid yet\" otherwise; payment already moves a paid order's items to CONFIRMED). Cancelling returns the stock and voids the commission. Allowed values: CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED. Must move forward one step at a time (PENDING -> CONFIRMED -> PROCESSING -> SHIPPED -> DELIVERED); CANCELLED is allowed from any non-terminal state. The order's overall status (visible to the customer) always reflects whichever vendor segment is the least far along."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments (Customer)",
+      "item": [
+        {
+          "name": "Create payment for my order (saves paymentId, transactionId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const { payment } = pm.response.json();",
+                  "  pm.collectionVariables.set('paymentId', payment.id);",
+                  "  pm.collectionVariables.set('transactionId', payment.transactionId);",
+                  "  pm.collectionVariables.set('paymentAmount', payment.amount);",
+                  "}",
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/create",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\"\n}"
+            },
+            "description": "Only the order id is sent -- the amount is always read from the order in the database. 404 for an order that isn't yours, 409 if it is already paid, 400 if it is cancelled. Calling it again for the same order returns the same open payment (no duplicates). A FAILED or expired payment lets you create a fresh one."
+          }
+        },
+        {
+          "name": "Verify payment (provider is asked, not the browser)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{transactionId}}\"\n}"
+            },
+            "description": "The server asks the payment provider for the real status and checks the amount and order match. PAID -> order becomes CONFIRMED. Safe to call repeatedly (already-settled payments just return their state). Before the customer has paid it stays PENDING."
+          }
+        },
+        {
+          "name": "Mock: customer pays - success (webhook delivered)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/mock/pay",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{transactionId}}\",\n  \"outcome\": \"success\"\n}"
+            },
+            "description": "Development only (PAYMENT_PROVIDER=mock; 404 otherwise). Stands in for the customer paying on the provider's page. The provider then sends a signed webhook, so the payment is PAID straight away."
+          }
+        },
+        {
+          "name": "Mock: customer pays - success, webhook NOT delivered",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/mock/pay",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{transactionId}}\",\n  \"outcome\": \"success\",\n  \"deliverWebhook\": false\n}"
+            },
+            "description": "Same as above but our server is NOT told. The payment stays PENDING until you call \"Verify payment\", which asks the provider and settles it (what happens when a webhook is late or lost)."
+          }
+        },
+        {
+          "name": "Mock: customer pays - failure",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/mock/pay",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{transactionId}}\",\n  \"outcome\": \"failure\"\n}"
+            },
+            "description": "Payment becomes FAILED and the order stays PENDING (not confirmed). Create a new payment for the same order to retry."
+          }
+        },
+        {
+          "name": "Webhook - signed success event (provider -> server)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const secret = pm.collectionVariables.get('webhookSecret');",
+                  "if (!secret) throw new Error('Set the webhookSecret collection variable to PAYMENT_WEBHOOK_SECRET from backend/.env');",
+                  "const eventId = 'evt_' + Date.now();",
+                  "pm.collectionVariables.set('webhookEventId', eventId);",
+                  "const body = JSON.stringify({",
+                  "  id: eventId,",
+                  "  type: 'payment.succeeded',",
+                  "  data: {",
+                  "    transactionId: pm.collectionVariables.get('transactionId'),",
+                  "    orderId: pm.collectionVariables.get('orderId'),",
+                  "    amount: Number(pm.collectionVariables.get('paymentAmount')),",
+                  "    currency: 'USD',",
+                  "  },",
+                  "});",
+                  "pm.collectionVariables.set('webhookBody', body);",
+                  "pm.collectionVariables.set('webhookSignature', CryptoJS.HmacSHA256(body, secret).toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"received\", () => pm.expect(pm.response.json().received).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-payment-signature",
+                "value": "{{webhookSignature}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/webhook",
+            "body": {
+              "mode": "raw",
+              "raw": "{{webhookBody}}"
+            },
+            "description": "Called by the provider, not by a user -- no Authorization header. The pre-request script builds the event and signs it (HMAC-SHA256) with the `webhookSecret` collection variable: paste PAYMENT_WEBHOOK_SECRET from backend/.env there. Needs `transactionId`, `orderId` and `paymentAmount` from \"Create payment\". This only simulates the provider's call: the mock provider itself is not told the customer paid, so a payment settled this way can't be refunded later. To try the refund, pay with a \"Mock: customer pays - success\" request instead."
+          }
+        },
+        {
+          "name": "Webhook - replay the same event (no effect)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const secret = pm.collectionVariables.get('webhookSecret');",
+                  "if (!secret) throw new Error('Set the webhookSecret collection variable to PAYMENT_WEBHOOK_SECRET from backend/.env');",
+                  "const eventId = pm.collectionVariables.get('webhookEventId');",
+                  "if (!eventId) throw new Error('Run \"Webhook - signed success event\" first so there is an event to replay');",
+                  "const body = JSON.stringify({",
+                  "  id: eventId,",
+                  "  type: 'payment.succeeded',",
+                  "  data: {",
+                  "    transactionId: pm.collectionVariables.get('transactionId'),",
+                  "    orderId: pm.collectionVariables.get('orderId'),",
+                  "    amount: Number(pm.collectionVariables.get('paymentAmount')),",
+                  "    currency: 'USD',",
+                  "  },",
+                  "});",
+                  "pm.collectionVariables.set('webhookBody', body);",
+                  "pm.collectionVariables.set('webhookSignature', CryptoJS.HmacSHA256(body, secret).toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-payment-signature",
+                "value": "{{webhookSignature}}"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/webhook",
+            "body": {
+              "mode": "raw",
+              "raw": "{{webhookBody}}"
+            },
+            "description": "Re-sends the exact event from the previous request. Still 200 (so the provider stops retrying) but nothing changes: paidAt stays the same and the event is processed only once."
+          }
+        },
+        {
+          "name": "Webhook - invalid signature (expect 400)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const secret = pm.collectionVariables.get('webhookSecret');",
+                  "if (!secret) throw new Error('Set the webhookSecret collection variable to PAYMENT_WEBHOOK_SECRET from backend/.env');",
+                  "const eventId = 'evt_' + Date.now();",
+                  "pm.collectionVariables.set('webhookEventId', eventId);",
+                  "const body = JSON.stringify({",
+                  "  id: eventId,",
+                  "  type: 'payment.succeeded',",
+                  "  data: {",
+                  "    transactionId: pm.collectionVariables.get('transactionId'),",
+                  "    orderId: pm.collectionVariables.get('orderId'),",
+                  "    amount: Number(pm.collectionVariables.get('paymentAmount')),",
+                  "    currency: 'USD',",
+                  "  },",
+                  "});",
+                  "pm.collectionVariables.set('webhookBody', body);",
+                  "pm.collectionVariables.set('webhookSignature', CryptoJS.HmacSHA256(body, secret).toString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-payment-signature",
+                "value": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/webhook",
+            "body": {
+              "mode": "raw",
+              "raw": "{{webhookBody}}"
+            },
+            "description": "A request that is not signed with the shared secret is rejected, so nobody can fake a \"payment done\" event."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendor - Earnings",
+      "item": [
+        {
+          "name": "My earnings, summary + history",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor/earnings?status=PENDING&from=2026-10-01&to=2026-10-31&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor",
+                "earnings"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING",
+                  "description": "PENDING | PAID | REFUNDED | CANCELLED (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-10-01",
+                  "description": "Start date, ISO (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-10-31",
+                  "description": "End date, ISO; a plain date includes that whole day (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "1-50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "`summary` (total sales, total commission, net earnings, paid earnings, pending earnings) counts only earned money -- PENDING and PAID. Cancelled and refunded sales are still listed in `transactions` but never added to the totals. Commission is PENDING until the item is DELIVERED, then PAID. Only your own products' sales are ever returned."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Payments",
+      "item": [
+        {
+          "name": "List payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/payments?search=mock_txn_&status=PAID&from=2026-10-01&to=2026-10-31&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "mock_txn_",
+                  "description": "Part of a transaction id (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "PAID",
+                  "description": "PENDING | PROCESSING | PAID | FAILED | REFUNDED | CANCELLED (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-10-01",
+                  "description": "Created on/after this date (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-10-31",
+                  "description": "Created on/before this date (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "1-50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Each row shows the customer, the related order, the amount and refund info. Provider secrets and webhook internals are never included."
+          }
+        },
+        {
+          "name": "Get payment by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/payments/{{paymentId}}",
+            "description": "Payment + customer + order + the order's items (with their vendors)."
+          }
+        },
+        {
+          "name": "Refund payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/payments/{{paymentId}}/refund",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer requested a refund\"\n}"
+            },
+            "description": "Admin only. Only a PAID payment can be refunded (400 otherwise, 409 if already refunded). Asks the provider to refund first, then marks the payment REFUNDED and the order's paymentStatus REFUNDED, cancels not-yet-delivered items (stock returns), and sets the related commissions to REFUNDED. `reason` is optional. Use a payment that was paid through a \"Mock: customer pays - success\" request (the mock provider must know it succeeded)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Orders",
+      "item": [
+        {
+          "name": "List all orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/orders?search=customer@test.com&status=CONFIRMED&paymentStatus=PAID&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "customer@test.com",
+                  "description": "Customer name/email, full order id, or the short #id (last 8 characters) (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "CONFIRMED",
+                  "description": "PENDING | CONFIRMED | PROCESSING | SHIPPED | DELIVERED | CANCELLED (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "paymentStatus",
+                  "value": "PAID",
+                  "description": "PENDING | PAID | FAILED | REFUNDED | CANCELLED (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "1-50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Opening this list also cancels orders that have been unpaid for 24 hours and returns their stock (there is no background worker on Vercel serverless)."
+          }
+        },
+        {
+          "name": "Get order by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/orders/{{orderId}}",
+            "description": "Full order with customer, items per vendor and every payment attempt."
+          }
+        },
+        {
+          "name": "Update order status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/orders/{{orderId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PROCESSING\"\n}"
+            },
+            "description": "Allowed values: PROCESSING, SHIPPED, DELIVERED, CANCELLED. Moves every active item one step forward (no skipping), and only for a PAID order (400 \"not been paid yet\"). CANCELLED works for unpaid orders (stock is returned); a PAID order must be refunded instead."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Dashboard Stats",
+      "item": [
+        {
+          "name": "Marketplace stats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/stats",
+            "description": "totalOrders, paidOrders, pendingPayments, failedPayments, refundedPayments, totalSales (paid payments), totalCommission and vendorEarnings (both from earned commissions, so refunded/cancelled sales are excluded)."
           }
         }
       ]

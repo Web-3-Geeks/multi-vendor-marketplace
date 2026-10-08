@@ -1,0 +1,8 @@
+const COMMISSION_STATUS = Object.freeze({
+  PENDING: "PENDING",
+  PAID: "PAID",
+  REFUNDED: "REFUNDED",
+  CANCELLED: "CANCELLED",
+});
+
+module.exports = { COMMISSION_STATUS };

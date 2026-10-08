@@ -7,6 +7,10 @@ const OrderItem = require("../models/OrderItem");
 const PRODUCT_STATUS = require("../constants/productStatus");
 const VENDOR_STATUS = require("../constants/vendorStatus");
 const { ORDER_STATUS, ORDER_STATUS_SEQUENCE } = require("../constants/orderStatus");
+const { PAYMENT_STATUS } = require("../constants/paymentStatus");
+const { COMMISSION_STATUS } = require("../constants/commissionStatus");
+const { setCommissionStatus } = require("./commissionService");
+const { round2 } = require("../utils/money");
 
 class CheckoutError extends Error {
   constructor(message, errors = []) {
@@ -16,7 +20,12 @@ class CheckoutError extends Error {
   }
 }
 
-const round2 = (n) => Math.round(n * 100) / 100;
+class OrderError extends Error {
+  constructor(message, statusCode = 400) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
 
 // Re-reads every cart item FRESH, inside the transaction, and re-checks everything
 // the spec asks for (exists, ACTIVE, vendor APPROVED, enough stock). This runs at
@@ -24,6 +33,7 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // change by another customer can't slip a bad order through (the whole point of
 // doing this inside a transaction rather than validating first and creating after).
 const createOrderFromCart = async (userId) => {
+  await cancelStaleUnpaidOrders();
   const session = await mongoose.startSession();
   try {
     let result;
@@ -117,6 +127,7 @@ const recomputeOrderStatus = async (orderId, session) => {
 const toOrderDTO = (order, items) => ({
   id: order._id,
   status: order.status,
+  paymentStatus: order.paymentStatus,
   subtotal: order.subtotal,
   shippingAmount: order.shippingAmount,
   discountAmount: order.discountAmount,
@@ -165,8 +176,117 @@ const isValidTransition = (current, next) => {
   return nextIndex === currentIndex + 1;
 };
 
+const cancelItems = async (items, session) => {
+  for (const item of items) {
+    const product = await Product.findById(item.product).session(session);
+    if (product) {
+      product.stock += item.quantity;
+      await product.save({ session });
+    }
+  }
+  const ids = items.map((item) => item._id);
+  await OrderItem.updateMany({ _id: { $in: ids } }, { status: ORDER_STATUS.CANCELLED }, { session });
+  await setCommissionStatus({ orderItem: { $in: ids } }, COMMISSION_STATUS.CANCELLED, session);
+};
+
+// Shared by the vendor endpoint (vendorId set: only that vendor's items) and the
+// admin endpoint (whole order, cancelled items skipped). Everything runs in one
+// transaction so stock, commissions and the order's derived status stay consistent.
+const updateItemsStatus = async (orderId, status, { vendorId, activeOnly = false } = {}) => {
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findById(orderId).session(session);
+      const filter = { order: orderId };
+      if (vendorId) filter.vendor = vendorId;
+      let items = await OrderItem.find(filter).session(session);
+      if (activeOnly) items = items.filter((item) => item.status !== ORDER_STATUS.CANCELLED);
+
+      if (!order || (vendorId && items.length === 0)) throw new OrderError("Order not found", 404);
+      if (items.length === 0) throw new OrderError("This order has no active items");
+
+      if (status !== ORDER_STATUS.CANCELLED && order.paymentStatus !== PAYMENT_STATUS.PAID) {
+        throw new OrderError("This order has not been paid yet");
+      }
+
+      const invalid = items.find((item) => !isValidTransition(item.status, status));
+      if (invalid) throw new OrderError(`Cannot move an item from ${invalid.status} to ${status}`);
+
+      if (status === ORDER_STATUS.CANCELLED) {
+        await cancelItems(items, session);
+      } else {
+        const ids = items.map((item) => item._id);
+        await OrderItem.updateMany({ _id: { $in: ids } }, { status }, { session });
+        if (status === ORDER_STATUS.DELIVERED) {
+          await setCommissionStatus({ orderItem: { $in: ids } }, COMMISSION_STATUS.PAID, session);
+        }
+      }
+
+      const orderStatus = await recomputeOrderStatus(orderId, session);
+      const unpaid = [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED].includes(order.paymentStatus);
+      if (orderStatus === ORDER_STATUS.CANCELLED && unpaid) {
+        await Order.updateOne({ _id: orderId }, { paymentStatus: PAYMENT_STATUS.CANCELLED }, { session });
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
+const UNPAID_ORDER_TTL_MS = 24 * 60 * 60 * 1000;
+const STALE_BATCH_SIZE = 50;
+
+const cancelUnpaidOrder = async (orderId) => {
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findOneAndUpdate(
+        {
+          _id: orderId,
+          status: ORDER_STATUS.PENDING,
+          paymentStatus: { $in: [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED] },
+        },
+        { status: ORDER_STATUS.CANCELLED, paymentStatus: PAYMENT_STATUS.CANCELLED },
+        { session },
+      );
+      if (!order) return;
+
+      const items = await OrderItem.find({ order: orderId }).session(session);
+      await cancelItems(items, session);
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
+// There is no background worker on Vercel serverless, so abandoned orders are
+// cleaned up lazily: whenever someone checks out or an admin opens the order
+// list/stats, orders unpaid for 24h are cancelled and their stock released.
+// Orders from before payments existed have no paymentStatus field, so they never match.
+const cancelStaleUnpaidOrders = async () => {
+  try {
+    const stale = await Order.find({
+      status: ORDER_STATUS.PENDING,
+      paymentStatus: { $in: [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED] },
+      createdAt: { $lt: new Date(Date.now() - UNPAID_ORDER_TTL_MS) },
+    })
+      .select("_id")
+      .limit(STALE_BATCH_SIZE);
+
+    for (const { _id } of stale) {
+      await cancelUnpaidOrder(_id);
+    }
+  } catch (err) {
+    console.error("Failed to cancel stale unpaid orders:", err.message);
+  }
+};
+
 module.exports = {
   CheckoutError,
+  OrderError,
+  cancelItems,
+  cancelStaleUnpaidOrders,
+  updateItemsStatus,
   createOrderFromCart,
   getOrderForUser,
   listOrdersForUser,

@@ -154,7 +154,53 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 ## 11. Wrap-up
 - [x] Manual test: Browse -> multi-vendor cart -> checkout -> order -> order history; vendor sees only own order items (26 automated browser checks + full Day 1/Day 2 regression)
 - [x] Lint + build check
-- [ ] Deploy + test live (pending push)
+- [x] Deploy + test live (pending push)
 - [x] Update Postman collection with cart/checkout/order endpoints
 - [x] Update README with Day 3 summary
 - [x] Sync root -> week6/Day3 snapshot, commit, push
+
+# Week 6 - Day 4 Plan: Payments, Order Management & Vendor Commissions
+
+## 1. Payment Model & Provider (backend)
+- [x] Payment status constants + Payment model (order, user, amount, currency, provider, transactionId unique-sparse, status, paymentMethod, paidAt, refund info, processedEvents for idempotency)
+- [x] Env vars: PAYMENT_PROVIDER, PAYMENT_PUBLIC_KEY, PAYMENT_SECRET_KEY, PAYMENT_WEBHOOK_SECRET (+ .env.example, required-env check)
+- [x] Payment provider layer (services/payment/): fixed interface createIntent / retrieve / verifyWebhook / refund, mock provider implementation
+
+## 2. Payment Flow (backend)
+- [x] POST /api/payments/create (auth, order ownership by query, eligibility, amount from DB, provider intent, store Payment)
+- [x] POST /api/payments/verify (provider lookup, amount + order match, idempotent, Payment PAID + Order CONFIRMED, failure handling)
+- [x] POST /api/payments/webhook (raw body, signature check, success/failed events, event-id idempotency)
+- [x] Block paying an already-paid order; expire abandoned payment sessions
+- [x] Update Day 3 checkout: orders start unpaid/PENDING, payment drives CONFIRMED
+
+## 3. Commissions & Vendor Earnings (backend)
+- [x] Commission model (order, orderItem, vendor, grossAmount, commissionRate, commissionAmount, vendorAmount, status)
+- [x] Configurable COMMISSION_RATE; create commission records when payment becomes PAID
+- [x] GET /api/vendor/earnings (totals, paid/pending, item references, date history, own products only)
+
+## 4. Admin Management (backend)
+- [x] GET /api/admin/payments (search by transactionId, status + date filters, customer info)
+- [x] GET /api/admin/payments/:id
+- [x] GET /api/admin/orders (search, status + payment-status filters)
+- [x] GET /api/admin/orders/:id
+- [x] PATCH /api/admin/orders/:id/status (allowed transitions, cancel rules)
+- [x] POST /api/admin/payments/:id/refund (eligibility, no double refund, provider refund, update payment + order)
+- [x] Admin dashboard stats endpoint (orders, payments, sales, commission)
+
+## 5. Backend Review
+- [x] Security/correctness pass: no card data, no secrets in responses/logs, server-side amounts, ownership, signature, idempotency, unauthorized refunds
+
+## 6. Frontend
+- [ ] Payment page (order summary, amount, method, status states: pending/processing/success/failed/cancelled, loading)
+- [ ] Success only after backend verification (never from redirect)
+- [ ] Vendor earnings dashboard (cards + earnings table)
+- [ ] Admin dashboard (stat cards + quick links to Orders/Payments/Vendors/Products/Categories)
+- [ ] Admin orders + payments pages (list, filters, detail, refund)
+
+## 7. Wrap-up
+- [ ] Manual/automated test: order -> pay -> verified -> CONFIRMED; vendor earnings; admin views + refund; full Day 1-3 regression
+- [ ] Lint + build check
+- [x] Postman collection: Day 4 folders (payments, vendor earnings, admin payments/orders/stats)
+- [ ] README: Day 4 section + endpoint table + structure
+- [ ] Sync root -> week6/Day4 snapshot + snapshot index row
+- [ ] Deploy + test live (pending push)

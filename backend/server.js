@@ -13,14 +13,36 @@ const checkoutRoutes = require("./routes/checkoutRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const vendorOrderRoutes = require("./routes/vendorOrderRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const vendorEarningsRoutes = require("./routes/vendorEarningsRoutes");
+const adminPaymentRoutes = require("./routes/adminPaymentRoutes");
+const adminOrderRoutes = require("./routes/adminOrderRoutes");
+const adminStatsRoutes = require("./routes/adminStatsRoutes");
+const { getCommissionRate } = require("./services/commissionService");
 const dotenv = require("dotenv");
 
 dotenv.config();
 
-const required = ["DATABASE_URL", "JWT_SECRET", "FRONTEND_URL"];
+const required = [
+  "DATABASE_URL",
+  "JWT_SECRET",
+  "FRONTEND_URL",
+  "PAYMENT_PROVIDER",
+  "PAYMENT_PUBLIC_KEY",
+  "PAYMENT_SECRET_KEY",
+  "PAYMENT_WEBHOOK_SECRET",
+];
+
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length) {
   console.error(`Missing environment variables: ${missing.join(", ")}`);
+  process.exit(1);
+}
+
+try {
+  getCommissionRate();
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 
@@ -28,6 +50,7 @@ const app = express();
 app.disable("x-powered-by");
 
 app.use(cors({ origin: process.env.FRONTEND_URL }));
+app.use("/api/payments/webhook", express.raw({ type: "*/*" }));
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {
@@ -55,6 +78,16 @@ app.use("/api/checkout", checkoutRoutes);
 app.use("/api/orders", orderRoutes);
 
 app.use("/api/vendor/orders", vendorOrderRoutes);
+
+app.use("/api/payments", paymentRoutes);
+
+app.use("/api/vendor/earnings", vendorEarningsRoutes);
+
+app.use("/api/admin/payments", adminPaymentRoutes);
+
+app.use("/api/admin/orders", adminOrderRoutes);
+
+app.use("/api/admin/stats", adminStatsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
