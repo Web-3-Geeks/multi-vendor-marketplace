@@ -250,4 +250,4 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] README: overview, setup, tests, API, roles, payment workflow, security checks, deployment, test accounts
 - [x] Postman collection: audit logs, admin products, pagination params
 - [x] Production build passes; week6/Day5 snapshot + index row
-- [ ] Final live test on the deployed URLs (after push)
+- [x] Final live test on the deployed URLs (e2e 57/57, Newman 34 requests / 23 assertions, headers, validation, injection, CORS, 413)
