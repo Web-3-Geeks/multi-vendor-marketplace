@@ -47,6 +47,8 @@ app.get("/api/health", (req, res) => {
   res.status(databaseUp ? 200 : 503).json({
     status: databaseUp ? "ok" : "degraded",
     database: databaseUp ? "connected" : "disconnected",
+    // Why the last connection attempt failed (credentials and host names removed).
+    ...(!databaseUp && app.locals.dbError ? { reason: app.locals.dbError } : {}),
     uptime: Math.round(process.uptime()),
   });
 });
