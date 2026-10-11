@@ -42,7 +42,7 @@ Contents: [Live links](#live-links) · [Tech stack](#tech-stack) · [Project str
 
 ```
 backend/
-  app.js                 The Express app: helmet, CORS, rate limits, body parsing + sanitising, routes, 404, error handler (no listen, so tests can import it)
+  expressApp.js          The Express app: helmet, CORS, rate limits, body parsing + sanitising, routes, 404, error handler (no listen, so tests can import it). Deliberately not named app.js: Vercel would pick that as the entry file and skip server.js, which is what connects to MongoDB
   server.js              Starts it: checks required env vars, connects to MongoDB, listens
   constants/              Roles, the vendor/product/order/payment/commission statuses and the audit-log actions -- each in one place
   models/
@@ -339,11 +339,11 @@ Guarantees (each is covered by an automated test):
 | Auth | JWT (1 day) in the `Authorization` header; the user is reloaded from the database on every request, so a deleted user is locked out at once | `middleware/auth.js` |
 | RBAC | Role checks on every protected route; ownership checks in the query itself (`{ _id, vendor }`), so another vendor's data is a 404 | `middleware/`, controllers |
 | Rate limiting | Failed logins: 10 per 15 min per account+IP and 50 per 15 min per IP (successful logins do not count); register 20/h; checkout 20/min; payments 30/min; refunds 10/min; webhook 300/min; everything 300/min per IP. Answers 429 | `middleware/rateLimit.js` |
-| Security headers | helmet (CSP-style defaults, `nosniff`, frame protection, HSTS on HTTPS); `x-powered-by` removed | `app.js` |
-| CORS | Only `FRONTEND_URL` is allowed | `app.js` |
+| Security headers | helmet (CSP-style defaults, `nosniff`, frame protection, HSTS on HTTPS); `x-powered-by` removed | `expressApp.js` |
+| CORS | Only `FRONTEND_URL` is allowed | `expressApp.js` |
 | Input validation | express-validator on every body, query and id; unknown fields are dropped (address and product fields are whitelisted); bad ids are 400, never 500 | `validators/` |
 | NoSQL injection | Request bodies are stripped of keys starting with `$` or containing `.`; search text is regex-escaped | `middleware/sanitize.js`, `utils/escapeRegex.js` |
-| Body size | 100 kb limit on JSON and on the webhook | `app.js` |
+| Body size | 100 kb limit on JSON and on the webhook | `expressApp.js` |
 | Payments | Amount from the database; HMAC-SHA256 over the raw body; `timingSafeEqual`; idempotent events; no card data ever stored or logged | `services/payment*` |
 | Secrets | Only in environment variables; `.env` is git-ignored; a test scans every response for secret values; the server refuses to start if one is missing | `server.js` |
 | Error handling | One handler: validation and known errors keep their message, everything else is a generic 500 with details only in the server log | `middleware/errorHandler.js` |
@@ -696,7 +696,7 @@ If a payment arrives for an order that was already cancelled, the payment is sti
 **Security and integrity**
 - helmet, rate limits (login per account and per IP, register, checkout, payments, refunds, webhook, global), a body sanitiser against `$`/dotted keys, a 100 kb body limit, trust-proxy on Vercel, request logging without query strings or bodies, and a `/api/health` that reports the database state.
 - Index review (products, vendors, commissions, order items, audit log). `autoIndex` is off in production; `npm run db:setup` creates everything.
-- `app.js` / `server.js` split so the whole API can be tested in-process.
+- `expressApp.js` / `server.js` split so the whole API can be tested in-process.
 
 **Performance and UX**
 - Pagination on every list that can grow (customer orders, vendor orders and products, admin vendors, public stores) with `?page=&limit=` validated everywhere; the customer order list went from 2 queries per order to 3 per page.

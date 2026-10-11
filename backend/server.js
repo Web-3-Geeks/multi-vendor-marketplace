@@ -21,7 +21,7 @@ if (missing.length) {
 
 // Loaded after dotenv: the app reads FRONTEND_URL and friends when it is built.
 const { getCommissionRate } = require("./services/commissionService");
-const app = require("./app");
+const app = require("./expressApp");
 
 try {
   getCommissionRate();

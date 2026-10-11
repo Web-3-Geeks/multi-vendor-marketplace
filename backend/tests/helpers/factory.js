@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const request = require("supertest");
-const app = require("../../app");
+const app = require("../../expressApp");
 const User = require("../../models/User");
 const Vendor = require("../../models/Vendor");
 const Category = require("../../models/Category");
