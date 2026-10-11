@@ -1,0 +1,8 @@
+const VENDOR_STATUS = Object.freeze({
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  SUSPENDED: "SUSPENDED",
+  REJECTED: "REJECTED",
+});
+
+module.exports = VENDOR_STATUS;
