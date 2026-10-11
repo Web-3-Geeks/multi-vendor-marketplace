@@ -15,6 +15,7 @@ import { EmptyState, Panel } from '../dashboard/widgets'
 import Badge from '../ui/Badge'
 import Spinner from '../ui/Spinner'
 import Alert from '../ui/Alert'
+import { AddressLines } from '../orders/ShippingAddress'
 
 function VendorOrdersPanel() {
   const { token } = useAuth()
@@ -86,6 +87,20 @@ function VendorOrdersPanel() {
                     </li>
                   ))}
                 </ul>
+
+                {order.shippingAddress ? (
+                  <div className="mb-3 rounded-xl bg-slate-50 p-3">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Ship to</p>
+                    <AddressLines address={order.shippingAddress} />
+                  </div>
+                ) : (
+                  !paid &&
+                  segmentStatus !== ORDER_STATUS.CANCELLED && (
+                    <p className="mb-3 text-xs text-slate-500">
+                      The customer's shipping address is shared with you once the order is paid.
+                    </p>
+                  )
+                )}
 
                 <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
                   <p className="text-sm font-semibold">Your total: {formatPrice(order.vendorSubtotal)}</p>

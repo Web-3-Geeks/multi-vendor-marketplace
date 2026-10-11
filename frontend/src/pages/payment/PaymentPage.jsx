@@ -15,6 +15,7 @@ import Alert from '../../components/ui/Alert'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
+import ShippingAddress from '../../components/orders/ShippingAddress'
 
 const RESULT_TONES = {
   emerald: 'bg-emerald-50 text-emerald-600',
@@ -273,6 +274,7 @@ function PaymentPage() {
               </ul>
             </section>
           ))}
+          <ShippingAddress address={order.shippingAddress} />
         </div>
 
         <aside className="h-fit space-y-4 rounded-2xl border border-white bg-white/70 p-5 shadow-sm backdrop-blur-xl">

@@ -13,6 +13,7 @@ import {
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
+import ShippingAddress from '../../components/orders/ShippingAddress'
 
 function groupByVendor(items) {
   const groups = new Map()
@@ -111,6 +112,7 @@ function OrderDetailPage() {
               </ul>
             </section>
           ))}
+          <ShippingAddress address={order.shippingAddress} />
         </div>
 
         <aside className="h-fit space-y-2 rounded-2xl border border-white bg-white/70 p-5 shadow-sm backdrop-blur-xl">

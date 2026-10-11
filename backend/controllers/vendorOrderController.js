@@ -1,5 +1,6 @@
 const OrderItem = require("../models/OrderItem");
-const { round2, updateItemsStatus } = require("../services/orderService");
+const { round2, updateItemsStatus, toShippingAddressDTO } = require("../services/orderService");
+const { PAYMENT_STATUS } = require("../constants/paymentStatus");
 
 // Groups this vendor's order items by order, with a subtotal computed only
 // from their own items -- never the whole (possibly multi-vendor) order total.
@@ -12,6 +13,11 @@ const groupByOrder = (items) => {
         orderId: item.order._id,
         orderStatus: item.order.status,
         paymentStatus: item.order.paymentStatus,
+        // A customer's address is only shared with vendors once the order is paid.
+        shippingAddress:
+          item.order.paymentStatus === PAYMENT_STATUS.PAID
+            ? toShippingAddressDTO(item.order.shippingAddress) || null
+            : null,
         orderCreatedAt: item.order.createdAt,
         items: [],
         vendorSubtotal: 0,
@@ -33,7 +39,7 @@ const groupByOrder = (items) => {
 
 const listVendorOrders = async (req, res) => {
   const items = await OrderItem.find({ vendor: req.vendor._id })
-    .populate("order", "status paymentStatus createdAt")
+    .populate("order", "status paymentStatus shippingAddress createdAt")
     .sort({ createdAt: -1 });
 
   res.json({ orders: groupByOrder(items) });
@@ -42,7 +48,7 @@ const listVendorOrders = async (req, res) => {
 const getVendorOrder = async (req, res) => {
   const items = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
     "order",
-    "status paymentStatus createdAt",
+    "status paymentStatus shippingAddress createdAt",
   );
 
   if (items.length === 0) {
@@ -59,7 +65,7 @@ const updateVendorOrderStatus = async (req, res) => {
 
   const updated = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
     "order",
-    "status paymentStatus createdAt",
+    "status paymentStatus shippingAddress createdAt",
   );
   res.json({ order: groupByOrder(updated)[0] });
 };

@@ -32,7 +32,7 @@ class OrderError extends Error {
 // commit time, not as a separate "check then act" step, so a last-second stock
 // change by another customer can't slip a bad order through (the whole point of
 // doing this inside a transaction rather than validating first and creating after).
-const createOrderFromCart = async (userId) => {
+const createOrderFromCart = async (userId, shippingAddress) => {
   await cancelStaleUnpaidOrders();
   const session = await mongoose.startSession();
   try {
@@ -75,7 +75,7 @@ const createOrderFromCart = async (userId) => {
       const totalAmount = round2(subtotal + shippingAmount - discountAmount + taxAmount);
 
       const [order] = await Order.create(
-        [{ user: userId, subtotal, shippingAmount, discountAmount, taxAmount, totalAmount }],
+        [{ user: userId, shippingAddress, subtotal, shippingAmount, discountAmount, taxAmount, totalAmount }],
         { session },
       );
 
@@ -124,10 +124,23 @@ const recomputeOrderStatus = async (orderId, session) => {
   return status;
 };
 
+const toShippingAddressDTO = (address) =>
+  address && {
+    fullName: address.fullName,
+    phone: address.phone,
+    line1: address.line1,
+    line2: address.line2 || null,
+    city: address.city,
+    state: address.state || null,
+    postalCode: address.postalCode,
+    country: address.country,
+  };
+
 const toOrderDTO = (order, items) => ({
   id: order._id,
   status: order.status,
   paymentStatus: order.paymentStatus,
+  shippingAddress: toShippingAddressDTO(order.shippingAddress) || null,
   subtotal: order.subtotal,
   shippingAmount: order.shippingAmount,
   discountAmount: order.discountAmount,
@@ -293,5 +306,6 @@ module.exports = {
   recomputeOrderStatus,
   isValidTransition,
   toOrderDTO,
+  toShippingAddressDTO,
   round2,
 };

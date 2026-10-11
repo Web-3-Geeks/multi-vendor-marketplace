@@ -20,6 +20,7 @@ import Badge from '../ui/Badge'
 import Modal from '../ui/Modal'
 import SelectField from '../ui/SelectField'
 import Spinner from '../ui/Spinner'
+import { AddressLines } from '../orders/ShippingAddress'
 
 const PAGE_SIZE = 10
 
@@ -80,6 +81,15 @@ function OrderDetailModal({ orderId, onClose }) {
               {order.customer?.name} &middot; {order.customer?.email}
             </span>
           </div>
+
+          {order.shippingAddress ? (
+            <div className="rounded-2xl border border-slate-100 p-4">
+              <p className="mb-2 text-sm font-semibold">Shipping address</p>
+              <AddressLines address={order.shippingAddress} />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No shipping address was recorded for this order.</p>
+          )}
 
           {Array.from(vendors.values()).map((group) => (
             <section key={group.name} className="rounded-2xl border border-slate-100 p-4">

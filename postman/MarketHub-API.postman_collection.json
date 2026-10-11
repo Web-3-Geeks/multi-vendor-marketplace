@@ -511,9 +511,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
             "url": "{{baseUrl}}/checkout",
-            "description": "Re-validates every cart item inside a database transaction (still exists, ACTIVE, vendor APPROVED, enough stock), using DB prices only. On success: creates the order and its items, decrements stock, and clears the cart, all atomically. On failure: a 400 with an `errors` array naming which items are the problem -- nothing is created or changed."
+            "body": { "mode": "raw", "raw": "{\n  \"shippingAddress\": {\n    \"fullName\": \"Ayesha Khan\",\n    \"phone\": \"+92 300 1234567\",\n    \"line1\": \"12 Garden Road\",\n    \"line2\": \"Flat 4B\",\n    \"city\": \"Lahore\",\n    \"state\": \"Punjab\",\n    \"postalCode\": \"54000\",\n    \"country\": \"Pakistan\"\n  }\n}" },
+            "description": "Needs a `shippingAddress` (fullName, phone, line1, city, postalCode, country required; line2 and state optional) -- 400 with per-field errors if it is missing or invalid; it is saved on the order as a snapshot. Re-validates every cart item inside a database transaction (still exists, ACTIVE, vendor APPROVED, enough stock), using DB prices only. On success: creates the order and its items, decrements stock, and clears the cart, all atomically. On failure: a 400 with an `errors` array naming which items are the problem -- nothing is created or changed."
           }
         }
       ]

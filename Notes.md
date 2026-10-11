@@ -204,3 +204,41 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] README: Day 4 section + endpoint table + structure
 - [x] Sync root -> week6/Day4 snapshot + snapshot index row
 - [ ] Deploy + test live (pending push)
+
+# Week 6 - Day 5 Plan: Integration, Testing, Security & Deployment Readiness
+
+## 0. Shipping address (added on top of the Day 5 spec)
+- [x] Order.shippingAddress (fullName, phone, line1, line2, city, state, postalCode, country); legacy orders without one keep working
+- [x] POST /api/checkout requires + validates the address (whitelisted fields only) and snapshots it on the order
+- [x] Address returned on customer order DTO and admin order detail; vendor sees it only for PAID orders containing their items
+- [x] Checkout page address form (field errors), address shown on payment page, order detail, vendor + admin order views
+- [x] Postman checkout request updated with the address body
+
+## 1. Order and payment lifecycle (Task 2)
+- [ ] One state-machine module: valid order + payment status transitions, used by every status change
+- [ ] Audit trail (AuditLog model): admin actions, payment events, refunds, order status changes
+- [ ] Admin product management (list, archive/restore any product)
+
+## 2. Security and data integrity (Task 4)
+- [ ] Rate limiting on auth + sensitive endpoints, helmet security headers, input sanitisation
+- [ ] Index review for frequently filtered fields; confirm no secret/stack leaks in errors
+- [ ] Documented security checklist in README
+
+## 3. Performance and UX (Task 5)
+- [ ] Pagination: customer orders, vendor orders, vendor products, admin vendor applications, public vendors
+- [ ] Fix N+1 in order lists; set Vercel function region close to Atlas
+- [ ] Confirmation prompts for destructive actions (archive product, delete category, reject/suspend vendor, refund)
+- [ ] Loading / empty / success / error state pass; mobile + tablet check
+
+## 4. Automated tests in the repo (Task 3)
+- [ ] Backend: Jest + Supertest on a separate test database (auth, RBAC, vendors, products, cart/checkout, orders, payments, commissions, admin, validation)
+- [ ] Integration workflows (customer -> payment -> vendor -> admin refund; duplicate webhook safety)
+- [ ] Frontend: Vitest + React Testing Library (auth, cart/checkout, vendor + admin screens, states)
+- [ ] Playwright E2E scripts kept in e2e/ (desktop, tablet, mobile)
+
+## 5. Deployment readiness and docs (Task 6)
+- [ ] .env.example complete; dev vs production env documented; database setup script (indexes + seed)
+- [ ] Request logging; confirm production URLs, CORS and webhook URL
+- [ ] Document enabling a real payment provider (Stripe test mode steps)
+- [ ] README: overview, setup, tests, API, roles, payment workflow, security checks, deployment, test accounts
+- [ ] Production build passes; final live test; week6/Day5 snapshot + index row

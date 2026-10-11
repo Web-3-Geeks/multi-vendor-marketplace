@@ -1,33 +1,73 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { CreditCard, Store } from 'lucide-react'
+import { CreditCard, MapPin, Store } from 'lucide-react'
 import { useCart } from '../../hooks/useCart'
 import { useAuth } from '../../hooks/useAuth'
 import { apiRequest } from '../../lib/api'
 import { formatPrice } from '../../lib/format'
+import {
+  EMPTY_ADDRESS,
+  addressErrorsFromApi,
+  toShippingPayload,
+  validateAddress,
+} from '../../lib/address'
 import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
 import Button from '../../components/ui/Button'
+import TextField from '../../components/ui/TextField'
 
 function CheckoutPage() {
   const { cart, loading, refresh } = useCart()
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const navigate = useNavigate()
   const [placing, setPlacing] = useState(false)
   const [formError, setFormError] = useState('')
   const [itemErrors, setItemErrors] = useState([])
+  const [address, setAddress] = useState(() => ({ ...EMPTY_ADDRESS, fullName: user?.name || '' }))
+  const [fieldErrors, setFieldErrors] = useState({})
 
-  const handlePlaceOrder = async () => {
+  const setField = (name) => (e) => {
+    setAddress((prev) => ({ ...prev, [name]: e.target.value }))
+    setFieldErrors((prev) => ({ ...prev, [name]: undefined }))
+  }
+
+  const focusFirstError = (errors) => {
+    const first = Object.keys(EMPTY_ADDRESS).find((key) => errors[key])
+    if (first) document.getElementById(`ship-${first}`)?.focus()
+  }
+
+  const handlePlaceOrder = async (e) => {
+    e.preventDefault()
     setFormError('')
     setItemErrors([])
+
+    const errors = validateAddress(address)
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setFormError('Please fix the highlighted fields.')
+      focusFirstError(errors)
+      return
+    }
+
     setPlacing(true)
     try {
-      const data = await apiRequest('/checkout', { method: 'POST', token })
+      const data = await apiRequest('/checkout', {
+        method: 'POST',
+        token,
+        body: { shippingAddress: toShippingPayload(address) },
+      })
       await refresh()
       navigate(`/pay/${data.order.id}`, { replace: true })
     } catch (err) {
-      setItemErrors(err.errors || [])
-      setFormError(err.message)
+      const apiFieldErrors = addressErrorsFromApi(err.errors)
+      if (Object.keys(apiFieldErrors).length > 0) {
+        setFieldErrors(apiFieldErrors)
+        setFormError('Please fix the highlighted fields.')
+        focusFirstError(apiFieldErrors)
+      } else {
+        setItemErrors((err.errors || []).filter((item) => !item.field))
+        setFormError(err.message)
+      }
     } finally {
       setPlacing(false)
     }
@@ -69,8 +109,99 @@ function CheckoutPage() {
         </Alert>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <form id="checkout-form" onSubmit={handlePlaceOrder} noValidate className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          <section
+            aria-labelledby="shipping-heading"
+            className="rounded-2xl border border-white bg-white/70 p-4 shadow-sm backdrop-blur-xl sm:p-5"
+          >
+            <h2 id="shipping-heading" className="mb-4 flex items-center gap-1.5 text-base font-semibold">
+              <MapPin aria-hidden="true" className="size-4 text-slate-400" />
+              Shipping address
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField
+                id="ship-fullName"
+                label="Full name"
+                autoComplete="name"
+                value={address.fullName}
+                onChange={setField('fullName')}
+                error={fieldErrors.fullName}
+                maxLength={100}
+              />
+              <TextField
+                id="ship-phone"
+                label="Phone number"
+                type="tel"
+                autoComplete="tel"
+                placeholder="+92 300 1234567"
+                value={address.phone}
+                onChange={setField('phone')}
+                error={fieldErrors.phone}
+                maxLength={20}
+              />
+              <div className="sm:col-span-2">
+              <TextField
+                id="ship-line1"
+                label="Address"
+                autoComplete="address-line1"
+                placeholder="House, street, area"
+                value={address.line1}
+                onChange={setField('line1')}
+                error={fieldErrors.line1}
+                maxLength={200}
+              />
+              </div>
+              <div className="sm:col-span-2">
+              <TextField
+                id="ship-line2"
+                label="Apartment, suite, etc. (optional)"
+                autoComplete="address-line2"
+                value={address.line2}
+                onChange={setField('line2')}
+                error={fieldErrors.line2}
+                maxLength={200}
+              />
+              </div>
+              <TextField
+                id="ship-city"
+                label="City"
+                autoComplete="address-level2"
+                value={address.city}
+                onChange={setField('city')}
+                error={fieldErrors.city}
+                maxLength={100}
+              />
+              <TextField
+                id="ship-state"
+                label="State or region (optional)"
+                autoComplete="address-level1"
+                value={address.state}
+                onChange={setField('state')}
+                error={fieldErrors.state}
+                maxLength={100}
+              />
+              <TextField
+                id="ship-postalCode"
+                label="Postal code"
+                autoComplete="postal-code"
+                value={address.postalCode}
+                onChange={setField('postalCode')}
+                error={fieldErrors.postalCode}
+                maxLength={12}
+              />
+              <TextField
+                id="ship-country"
+                label="Country"
+                autoComplete="country-name"
+                value={address.country}
+                onChange={setField('country')}
+                error={fieldErrors.country}
+                maxLength={100}
+              />
+            </div>
+          </section>
+
           {cart.vendorGroups.map((group) => (
             <section
               key={group.vendor?.id || 'unknown'}
@@ -130,11 +261,11 @@ function CheckoutPage() {
             </span>
           </div>
 
-          <Button onClick={handlePlaceOrder} loading={placing} disabled={cart.hasIssues}>
+          <Button type="submit" loading={placing} disabled={cart.hasIssues}>
             Place order &amp; continue to payment
           </Button>
         </aside>
-      </div>
+      </form>
     </div>
   )
 }
