@@ -1,4 +1,6 @@
+const { matchedData } = require("express-validator");
 const OrderItem = require("../models/OrderItem");
+const { pageParams, pageInfo } = require("../utils/pagination");
 const { round2, updateItemsStatus, toShippingAddressDTO } = require("../services/orderService");
 const { PAYMENT_STATUS } = require("../constants/paymentStatus");
 
@@ -37,12 +39,30 @@ const groupByOrder = (items) => {
   return Array.from(grouped.values());
 };
 
+// Pages are made of whole orders (newest first), not of loose items, so an order is
+// never split across two pages.
 const listVendorOrders = async (req, res) => {
-  const items = await OrderItem.find({ vendor: req.vendor._id })
+  const query = matchedData(req, { locations: ["query"] });
+  const { page, limit, skip } = pageParams(query, 10);
+
+  const [paged] = await OrderItem.aggregate([
+    { $match: { vendor: req.vendor._id } },
+    { $group: { _id: "$order", latest: { $max: "$createdAt" } } },
+    { $sort: { latest: -1, _id: -1 } },
+    { $facet: { ids: [{ $skip: skip }, { $limit: limit }], total: [{ $count: "count" }] } },
+  ]);
+
+  const items = await OrderItem.find({
+    vendor: req.vendor._id,
+    order: { $in: paged.ids.map((entry) => entry._id) },
+  })
     .populate("order", "status paymentStatus shippingAddress createdAt")
     .sort({ createdAt: -1 });
 
-  res.json({ orders: groupByOrder(items) });
+  res.json({
+    orders: groupByOrder(items),
+    pagination: pageInfo(page, limit, paged.total[0]?.count || 0),
+  });
 };
 
 const getVendorOrder = async (req, res) => {
@@ -61,7 +81,7 @@ const getVendorOrder = async (req, res) => {
 const updateVendorOrderStatus = async (req, res) => {
   const { status } = req.body;
 
-  await updateItemsStatus(req.params.id, status, { vendorId: req.vendor._id });
+  await updateItemsStatus(req.params.id, status, { vendorId: req.vendor._id, actor: req.user });
 
   const updated = await OrderItem.find({ vendor: req.vendor._id, order: req.params.id }).populate(
     "order",

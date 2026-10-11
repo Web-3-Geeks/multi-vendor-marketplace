@@ -6,6 +6,8 @@ import AdminOrdersPanel from '../../components/admin/AdminOrdersPanel'
 import AdminPaymentsPanel from '../../components/admin/AdminPaymentsPanel'
 import AdminVendorsPanel from '../../components/admin/AdminVendorsPanel'
 import AdminCategoriesPanel from '../../components/admin/AdminCategoriesPanel'
+import AdminProductsPanel from '../../components/admin/AdminProductsPanel'
+import AdminActivityPanel from '../../components/admin/AdminActivityPanel'
 
 function AdminDashboard({ user }) {
   const config = ROLE_CONFIG[user.role]
@@ -22,6 +24,8 @@ function AdminDashboard({ user }) {
       <AdminOrdersPanel />
       <div id="payments" className="scroll-mt-20" />
       <AdminPaymentsPanel />
+      <div id="products" className="scroll-mt-20" />
+      <AdminProductsPanel />
       <div className="grid gap-5 lg:grid-cols-5">
         <div className="space-y-5 lg:col-span-3">
           <div id="vendors" className="scroll-mt-20" />
@@ -33,6 +37,8 @@ function AdminDashboard({ user }) {
           <PermissionsPanel role={user.role} />
         </div>
       </div>
+      <div id="activity" className="scroll-mt-20" />
+      <AdminActivityPanel />
     </>
   )
 }

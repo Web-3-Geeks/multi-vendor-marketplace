@@ -7,6 +7,7 @@ const {
 } = require("../validators/adminValidators");
 const { authenticate, requireRole } = require("../middleware/auth");
 const validate = require("../middleware/validate");
+const { refundLimiter } = require("../middleware/rateLimit");
 const ROLES = require("../constants/roles");
 
 const router = express.Router();
@@ -15,6 +16,6 @@ router.use(authenticate, requireRole(ROLES.ADMIN));
 
 router.get("/", listPaymentsRules, validate, listPayments);
 router.get("/:id", paymentIdRules, validate, getPayment);
-router.post("/:id/refund", refundPaymentRules, validate, refund);
+router.post("/:id/refund", refundLimiter, refundPaymentRules, validate, refund);
 
 module.exports = router;

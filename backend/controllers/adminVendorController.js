@@ -1,17 +1,27 @@
+const { matchedData } = require("express-validator");
 const Vendor = require("../models/Vendor");
+const escapeRegex = require("../utils/escapeRegex");
+const { pageParams, pageInfo } = require("../utils/pagination");
 const User = require("../models/User");
 const ROLES = require("../constants/roles");
 const VENDOR_STATUS = require("../constants/vendorStatus");
+const { AUDIT_ACTION, AUDIT_ENTITY } = require("../constants/audit");
+const audit = require("../services/auditService");
 
 const listVendors = async (req, res) => {
+  const query = matchedData(req, { locations: ["query"] });
+  const { page, limit, skip } = pageParams(query);
+
   const filter = {};
-  if (req.query.status) filter.status = req.query.status;
+  if (query.status) filter.status = query.status;
+  if (query.search) filter.storeName = new RegExp(escapeRegex(query.search), "i");
 
-  const vendors = await Vendor.find(filter)
-    .populate("user", "name email role")
-    .sort({ createdAt: -1 });
+  const [vendors, total] = await Promise.all([
+    Vendor.find(filter).populate("user", "name email role").sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Vendor.countDocuments(filter),
+  ]);
 
-  res.json({ vendors });
+  res.json({ vendors, pagination: pageInfo(page, limit, total) });
 };
 
 const getVendorById = async (req, res) => {
@@ -30,8 +40,16 @@ const updateVendorStatus = async (req, res) => {
     return res.status(404).json({ message: "Vendor application not found" });
   }
 
+  const previousStatus = vendor.status;
   vendor.status = status;
   await vendor.save();
+  await audit.record({
+    actor: req.user,
+    action: AUDIT_ACTION.VENDOR_STATUS_CHANGED,
+    entityType: AUDIT_ENTITY.VENDOR,
+    entityId: vendor._id,
+    metadata: { storeName: vendor.storeName, from: previousStatus, to: status },
+  });
 
   // SUSPENDED keeps the VENDOR role so the vendor can still log in and see why
   // they're restricted. Only REJECTED (never approved) drops back to CUSTOMER.

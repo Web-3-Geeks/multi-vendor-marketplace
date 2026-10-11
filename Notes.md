@@ -215,30 +215,39 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] Postman checkout request updated with the address body
 
 ## 1. Order and payment lifecycle (Task 2)
-- [ ] One state-machine module: valid order + payment status transitions, used by every status change
-- [ ] Audit trail (AuditLog model): admin actions, payment events, refunds, order status changes
-- [ ] Admin product management (list, archive/restore any product)
+- [x] One state-machine module (services/stateMachine.js): valid order + payment status transitions, used by every status change
+- [x] Audit trail backend (append-only AuditLog; payment events, refunds, order status changes, vendor/product/category admin actions) + GET /api/admin/audit-logs
+- [x] Audit trail UI: activity timeline in the admin order details + admin Activity log panel (filters, pagination)
+- [x] Admin product moderation backend: GET /api/admin/products, PATCH /api/admin/products/:id/status (takedown lock the vendor can't undo)
+- [x] Admin products panel UI (search, status filter, take down / restore, vendor lock badge on the vendor side)
 
 ## 2. Security and data integrity (Task 4)
-- [ ] Rate limiting on auth + sensitive endpoints, helmet security headers, input sanitisation
-- [ ] Index review for frequently filtered fields; confirm no secret/stack leaks in errors
-- [ ] Documented security checklist in README
+- [x] Rate limiting on auth + payment/checkout/refund/webhook + global, helmet security headers, body sanitiser, 100kb body limit
+- [x] Index review (new indexes on products, vendors, commissions, order items, audit log); no secret/stack leaks in errors verified
+- [x] Documented security checklist in README
 
 ## 3. Performance and UX (Task 5)
-- [ ] Pagination: customer orders, vendor orders, vendor products, admin vendor applications, public vendors
-- [ ] Fix N+1 in order lists; set Vercel function region close to Atlas
-- [ ] Confirmation prompts for destructive actions (archive product, delete category, reject/suspend vendor, refund)
-- [ ] Loading / empty / success / error state pass; mobile + tablet check
+- [x] Pagination backend: customer orders, vendor orders, vendor products (+ store-wide summary), admin vendor applications, public vendors
+- [x] Pagination UI: customer orders, vendor orders + products (with search), admin vendors (with search), products, activity
+- [x] Fix N+1 in the customer order list (3 queries per page instead of 2 per order)
+- [x] Vercel function region set to Mumbai (bom1) to match the Atlas cluster (AWS ap-south-1): checkout 3.2s -> 0.3s
+- [x] Confirmation prompts (shared ConfirmDialog): archive product, delete category, reject/suspend vendor, admin cancel order, vendor cancel items, take down product (refund already had one)
+- [x] Success messages on every admin/vendor action, stale-data dimming while paging, empty states; tablet + mobile checked (no horizontal scroll)
+- [x] Fixed: modals were clipped inside backdrop-blur panels (now rendered through a portal)
 
 ## 4. Automated tests in the repo (Task 3)
-- [ ] Backend: Jest + Supertest on a separate test database (auth, RBAC, vendors, products, cart/checkout, orders, payments, commissions, admin, validation)
-- [ ] Integration workflows (customer -> payment -> vendor -> admin refund; duplicate webhook safety)
-- [ ] Frontend: Vitest + React Testing Library (auth, cart/checkout, vendor + admin screens, states)
-- [ ] Playwright E2E scripts kept in e2e/ (desktop, tablet, mobile)
+- [x] Backend: Jest + Supertest on a separate test database (auth, RBAC, vendors, products, cart/checkout, orders, payments, commissions, admin, validation)
+- [x] Integration workflows (customer -> payment -> vendor -> admin refund; duplicate webhook safety)
+- [x] Frontend: Vitest + React Testing Library (auth, cart/checkout, vendor + admin screens, states)
+- [x] Playwright E2E scripts kept in e2e/ (desktop, tablet, mobile)
 
 ## 5. Deployment readiness and docs (Task 6)
-- [ ] .env.example complete; dev vs production env documented; database setup script (indexes + seed)
-- [ ] Request logging; confirm production URLs, CORS and webhook URL
-- [ ] Document enabling a real payment provider (Stripe test mode steps)
-- [ ] README: overview, setup, tests, API, roles, payment workflow, security checks, deployment, test accounts
-- [ ] Production build passes; final live test; week6/Day5 snapshot + index row
+- [x] Database setup script: npm run db:setup (creates collections + indexes; autoIndex is off in production)
+- [x] .env.example complete; dev vs production env documented
+- [x] Request logging (no query strings or bodies) + /api/health reports database state and uptime
+- [x] Confirm production URLs, CORS and webhook URL
+- [x] Document enabling a real payment provider (Stripe test mode steps)
+- [x] README: overview, setup, tests, API, roles, payment workflow, security checks, deployment, test accounts
+- [x] Postman collection: audit logs, admin products, pagination params
+- [x] Production build passes; week6/Day5 snapshot + index row
+- [ ] Final live test on the deployed URLs (after push)

@@ -9,7 +9,7 @@ const {
 const { getProvider } = require("../services/payment");
 
 const createPayment = async (req, res) => {
-  const result = await createPaymentForOrder(req.user._id, req.body.orderId);
+  const result = await createPaymentForOrder(req.user, req.body.orderId);
   res.status(201).json(result);
 };
 
@@ -19,7 +19,7 @@ const getOrderPayment = async (req, res) => {
 };
 
 const verifyPaymentHandler = async (req, res) => {
-  const payment = await verifyPayment(req.user._id, req.body.transactionId);
+  const payment = await verifyPayment(req.user, req.body.transactionId);
   res.json({ payment });
 };
 
@@ -35,7 +35,7 @@ const webhookHandler = async (req, res) => {
 
 const simulatePaymentHandler = async (req, res) => {
   const { transactionId, outcome, deliverWebhook } = req.body;
-  const payment = await simulateMockPayment(req.user._id, transactionId, outcome, deliverWebhook);
+  const payment = await simulateMockPayment(req.user, transactionId, outcome, deliverWebhook);
   res.json({ payment });
 };
 

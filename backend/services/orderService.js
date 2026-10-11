@@ -10,7 +10,11 @@ const { ORDER_STATUS, ORDER_STATUS_SEQUENCE } = require("../constants/orderStatu
 const { PAYMENT_STATUS } = require("../constants/paymentStatus");
 const { COMMISSION_STATUS } = require("../constants/commissionStatus");
 const { setCommissionStatus } = require("./commissionService");
+const { ORDER_TRANSITIONS, ORDER_PAYMENT_TRANSITIONS, canTransition, fromStates } = require("./stateMachine");
+const audit = require("./auditService");
+const { AUDIT_ACTION, AUDIT_ENTITY, AUDIT_SOURCE } = require("../constants/audit");
 const { round2 } = require("../utils/money");
+const { pageInfo } = require("../utils/pagination");
 
 class CheckoutError extends Error {
   constructor(message, errors = []) {
@@ -168,26 +172,34 @@ const getOrderForUser = async (orderId, userId) => {
   return toOrderDTO(order, items);
 };
 
-const listOrdersForUser = async (userId) => {
-  const orders = await Order.find({ user: userId }).sort({ createdAt: -1 });
-  const all = [];
-  for (const order of orders) {
-    const items = await OrderItem.find({ order: order._id }).populate("vendor", "storeName");
-    all.push(toOrderDTO(order, items));
+// One page of the caller's orders. The items of every order on the page are fetched
+// in a single query (not one query per order), and grouped here.
+const listOrdersForUser = async (userId, { page = 1, limit = 10, skip = 0 } = {}) => {
+  const [orders, total] = await Promise.all([
+    Order.find({ user: userId }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Order.countDocuments({ user: userId }),
+  ]);
+
+  const items = await OrderItem.find({ order: { $in: orders.map((order) => order._id) } }).populate(
+    "vendor",
+    "storeName",
+  );
+  const byOrder = new Map();
+  for (const item of items) {
+    const key = String(item.order);
+    if (!byOrder.has(key)) byOrder.set(key, []);
+    byOrder.get(key).push(item);
   }
-  return all;
+
+  return {
+    orders: orders.map((order) => toOrderDTO(order, byOrder.get(String(order._id)) || [])),
+    pagination: pageInfo(page, limit, total),
+  };
 };
 
-// A vendor can only move their segment one step forward at a time, or cancel it
-// (unless it's already been delivered or cancelled). No skipping steps, no going
-// backward -- that's what "validate allowed status transitions" means here.
-const isValidTransition = (current, next) => {
-  if (current === ORDER_STATUS.CANCELLED || current === ORDER_STATUS.DELIVERED) return false;
-  if (next === ORDER_STATUS.CANCELLED) return true;
-  const currentIndex = ORDER_STATUS_SEQUENCE.indexOf(current);
-  const nextIndex = ORDER_STATUS_SEQUENCE.indexOf(next);
-  return nextIndex === currentIndex + 1;
-};
+// One step forward at a time, or cancel -- never skip a step or go backward. The
+// actual rules live in services/stateMachine.js.
+const isValidTransition = (current, next) => canTransition(ORDER_TRANSITIONS, current, next);
 
 const cancelItems = async (items, session) => {
   for (const item of items) {
@@ -205,7 +217,7 @@ const cancelItems = async (items, session) => {
 // Shared by the vendor endpoint (vendorId set: only that vendor's items) and the
 // admin endpoint (whole order, cancelled items skipped). Everything runs in one
 // transaction so stock, commissions and the order's derived status stay consistent.
-const updateItemsStatus = async (orderId, status, { vendorId, activeOnly = false } = {}) => {
+const updateItemsStatus = async (orderId, status, { vendorId, activeOnly = false, actor = null } = {}) => {
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
@@ -236,10 +248,31 @@ const updateItemsStatus = async (orderId, status, { vendorId, activeOnly = false
       }
 
       const orderStatus = await recomputeOrderStatus(orderId, session);
-      const unpaid = [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED].includes(order.paymentStatus);
-      if (orderStatus === ORDER_STATUS.CANCELLED && unpaid) {
-        await Order.updateOne({ _id: orderId }, { paymentStatus: PAYMENT_STATUS.CANCELLED }, { session });
+      if (orderStatus === ORDER_STATUS.CANCELLED) {
+        await Order.updateOne(
+          { _id: orderId, paymentStatus: { $in: fromStates(ORDER_PAYMENT_TRANSITIONS, PAYMENT_STATUS.CANCELLED) } },
+          { paymentStatus: PAYMENT_STATUS.CANCELLED },
+          { session },
+        );
       }
+
+      await audit.record(
+        {
+          actor,
+          action: AUDIT_ACTION.ORDER_STATUS_CHANGED,
+          entityType: AUDIT_ENTITY.ORDER,
+          entityId: orderId,
+          order: orderId,
+          metadata: {
+            itemStatus: status,
+            itemCount: items.length,
+            orderStatusFrom: order.status,
+            orderStatusTo: orderStatus,
+            ...(vendorId ? { vendorId } : {}),
+          },
+        },
+        session,
+      );
     });
   } finally {
     await session.endSession();
@@ -257,7 +290,7 @@ const cancelUnpaidOrder = async (orderId) => {
         {
           _id: orderId,
           status: ORDER_STATUS.PENDING,
-          paymentStatus: { $in: [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.FAILED] },
+          paymentStatus: { $in: fromStates(ORDER_PAYMENT_TRANSITIONS, PAYMENT_STATUS.CANCELLED) },
         },
         { status: ORDER_STATUS.CANCELLED, paymentStatus: PAYMENT_STATUS.CANCELLED },
         { session },
@@ -266,6 +299,23 @@ const cancelUnpaidOrder = async (orderId) => {
 
       const items = await OrderItem.find({ order: orderId }).session(session);
       await cancelItems(items, session);
+
+      await audit.record(
+        {
+          source: AUDIT_SOURCE.SYSTEM,
+          action: AUDIT_ACTION.ORDER_AUTO_CANCELLED,
+          entityType: AUDIT_ENTITY.ORDER,
+          entityId: orderId,
+          order: orderId,
+          metadata: {
+            reason: "Unpaid for 24 hours",
+            orderStatusFrom: order.status,
+            orderStatusTo: ORDER_STATUS.CANCELLED,
+            totalAmount: order.totalAmount,
+          },
+        },
+        session,
+      );
     });
   } finally {
     await session.endSession();

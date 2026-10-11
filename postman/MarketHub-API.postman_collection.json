@@ -5,22 +5,70 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:5000/api" },
-    { "key": "token", "value": "" },
-    { "key": "adminToken", "value": "" },
-    { "key": "vendorToken", "value": "" },
-    { "key": "categoryId", "value": "" },
-    { "key": "vendorApplicationId", "value": "" },
-    { "key": "productId", "value": "" },
-    { "key": "cartItemId", "value": "" },
-    { "key": "orderId", "value": "" },
-    { "key": "paymentId", "value": "" },
-    { "key": "transactionId", "value": "" },
-    { "key": "paymentAmount", "value": "" },
-    { "key": "webhookSecret", "value": "" },
-    { "key": "webhookEventId", "value": "" },
-    { "key": "webhookBody", "value": "" },
-    { "key": "webhookSignature", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "vendorToken",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "vendorApplicationId",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "cartItemId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "transactionId",
+      "value": ""
+    },
+    {
+      "key": "paymentAmount",
+      "value": ""
+    },
+    {
+      "key": "webhookSecret",
+      "value": ""
+    },
+    {
+      "key": "webhookEventId",
+      "value": ""
+    },
+    {
+      "key": "webhookBody",
+      "value": ""
+    },
+    {
+      "key": "webhookSignature",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -30,7 +78,12 @@
           "name": "Register (customer)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/auth/register",
             "body": {
               "mode": "raw",
@@ -55,7 +108,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
@@ -80,7 +138,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
@@ -105,7 +168,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
@@ -117,7 +185,12 @@
           "name": "Current user (/me)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{baseUrl}}/auth/me"
           }
         },
@@ -125,7 +198,12 @@
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{baseUrl}}/auth/logout"
           }
         }
@@ -138,7 +216,12 @@
           "name": "Customer dashboard",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{baseUrl}}/customer/dashboard"
           }
         },
@@ -146,7 +229,12 @@
           "name": "Vendor dashboard",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/vendor/dashboard"
           }
         },
@@ -154,7 +242,12 @@
           "name": "Admin dashboard",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/admin/dashboard"
           }
         }
@@ -168,8 +261,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": "{{baseUrl}}/vendors",
             "body": {
@@ -182,17 +281,28 @@
           "name": "My application status",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{baseUrl}}/vendors/me"
           }
         },
         {
           "name": "List approved stores (public)",
-          "request": { "method": "GET", "url": "{{baseUrl}}/vendors" }
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/vendors"
+          }
         },
         {
           "name": "Get store by id (public)",
-          "request": { "method": "GET", "url": "{{baseUrl}}/vendors/:id" }
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/vendors/:id"
+          }
         }
       ]
     },
@@ -203,12 +313,46 @@
           "name": "List vendor applications",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/admin/vendors?status=PENDING",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin", "vendors"],
-              "query": [{ "key": "status", "value": "PENDING", "description": "PENDING | APPROVED | SUSPENDED | REJECTED (optional)" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "vendors"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING",
+                  "description": "PENDING | APPROVED | SUSPENDED | REJECTED (optional)"
+                },
+                {
+                  "key": "search",
+                  "value": "demo",
+                  "description": "Store name, owner name or email (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number, 1 or more (default 1)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page, 1-50",
+                  "disabled": true
+                }
+              ]
             }
           }
         },
@@ -216,7 +360,12 @@
           "name": "Get vendor application by id",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}"
           }
         },
@@ -225,11 +374,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}/status",
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"APPROVED\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\"\n}"
+            }
           }
         },
         {
@@ -237,11 +395,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}/status",
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"REJECTED\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REJECTED\"\n}"
+            }
           }
         },
         {
@@ -249,11 +416,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/admin/vendors/{{vendorApplicationId}}/status",
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"SUSPENDED\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\"\n}"
+            }
           }
         }
       ]
@@ -263,7 +439,10 @@
       "item": [
         {
           "name": "List categories (public)",
-          "request": { "method": "GET", "url": "{{baseUrl}}/categories" }
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/categories"
+          }
         },
         {
           "name": "Create category (admin)",
@@ -282,8 +461,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/categories",
             "body": {
@@ -297,18 +482,32 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/categories/{{categoryId}}",
-            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated description\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description\"\n}"
+            }
           }
         },
         {
           "name": "Delete category (admin)",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/categories/{{categoryId}}"
           }
         }
@@ -334,8 +533,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
             ],
             "url": "{{baseUrl}}/vendor/products",
             "body": {
@@ -348,12 +553,46 @@
           "name": "List my products",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/vendor/products?status=ACTIVE",
-              "host": ["{{baseUrl}}"],
-              "path": ["vendor", "products"],
-              "query": [{ "key": "status", "value": "ACTIVE", "description": "DRAFT | ACTIVE | OUT_OF_STOCK | ARCHIVED (optional)" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "description": "DRAFT | ACTIVE | OUT_OF_STOCK | ARCHIVED (optional)"
+                },
+                {
+                  "key": "search",
+                  "value": "mouse",
+                  "description": "Product name (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number, 1 or more (default 1)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page, 1-50",
+                  "disabled": true
+                }
+              ]
             }
           }
         },
@@ -361,7 +600,12 @@
           "name": "Get my product by id",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/vendor/products/{{productId}}"
           }
         },
@@ -370,11 +614,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
             ],
             "url": "{{baseUrl}}/vendor/products/{{productId}}",
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"ACTIVE\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            }
           }
         },
         {
@@ -382,18 +635,32 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
             ],
             "url": "{{baseUrl}}/vendor/products/{{productId}}",
-            "body": { "mode": "raw", "raw": "{\n  \"stock\": 0\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock\": 0\n}"
+            }
           }
         },
         {
           "name": "Archive product (soft delete)",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/vendor/products/{{productId}}"
           }
         }
@@ -408,24 +675,60 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/products?search=mouse&category=electronics&minPrice=5&maxPrice=50&sort=price_asc&page=1&limit=12",
-              "host": ["{{baseUrl}}"],
-              "path": ["products"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
               "query": [
-                { "key": "search", "value": "mouse" },
-                { "key": "category", "value": "electronics", "description": "category slug or id" },
-                { "key": "vendor", "value": "", "description": "vendor id", "disabled": true },
-                { "key": "minPrice", "value": "5" },
-                { "key": "maxPrice", "value": "50" },
-                { "key": "sort", "value": "price_asc", "description": "newest | price_asc | price_desc" },
-                { "key": "page", "value": "1" },
-                { "key": "limit", "value": "12", "description": "max 50" }
+                {
+                  "key": "search",
+                  "value": "mouse"
+                },
+                {
+                  "key": "category",
+                  "value": "electronics",
+                  "description": "category slug or id"
+                },
+                {
+                  "key": "vendor",
+                  "value": "",
+                  "description": "vendor id",
+                  "disabled": true
+                },
+                {
+                  "key": "minPrice",
+                  "value": "5"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "50"
+                },
+                {
+                  "key": "sort",
+                  "value": "price_asc",
+                  "description": "newest | price_asc | price_desc"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "12",
+                  "description": "max 50"
+                }
               ]
             }
           }
         },
         {
           "name": "Get product by id",
-          "request": { "method": "GET", "url": "{{baseUrl}}/products/{{productId}}" }
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/products/{{productId}}"
+          }
         }
       ]
     },
@@ -450,8 +753,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": "{{baseUrl}}/cart/items",
             "body": {
@@ -465,7 +774,12 @@
           "name": "View cart",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{baseUrl}}/cart",
             "description": "Items are grouped by vendor. Each item may carry an `issue` (e.g. out of stock, vendor no longer approved) -- prices always come from the current product record, never from anything the client sent."
           }
@@ -475,18 +789,32 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": "{{baseUrl}}/cart/items/{{cartItemId}}",
-            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 3\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 3\n}"
+            }
           }
         },
         {
           "name": "Remove cart item",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{baseUrl}}/cart/items/{{cartItemId}}"
           }
         }
@@ -512,11 +840,20 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": "{{baseUrl}}/checkout",
-            "body": { "mode": "raw", "raw": "{\n  \"shippingAddress\": {\n    \"fullName\": \"Ayesha Khan\",\n    \"phone\": \"+92 300 1234567\",\n    \"line1\": \"12 Garden Road\",\n    \"line2\": \"Flat 4B\",\n    \"city\": \"Lahore\",\n    \"state\": \"Punjab\",\n    \"postalCode\": \"54000\",\n    \"country\": \"Pakistan\"\n  }\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shippingAddress\": {\n    \"fullName\": \"Ayesha Khan\",\n    \"phone\": \"+92 300 1234567\",\n    \"line1\": \"12 Garden Road\",\n    \"line2\": \"Flat 4B\",\n    \"city\": \"Lahore\",\n    \"state\": \"Punjab\",\n    \"postalCode\": \"54000\",\n    \"country\": \"Pakistan\"\n  }\n}"
+            },
             "description": "Needs a `shippingAddress` (fullName, phone, line1, city, postalCode, country required; line2 and state optional) -- 400 with per-field errors if it is missing or invalid; it is saved on the order as a snapshot. Re-validates every cart item inside a database transaction (still exists, ACTIVE, vendor APPROVED, enough stock), using DB prices only. On success: creates the order and its items, decrements stock, and clears the cart, all atomically. On failure: a 400 with an `errors` array naming which items are the problem -- nothing is created or changed."
           }
         }
@@ -529,15 +866,47 @@
           "name": "List my orders",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": "{{baseUrl}}/orders"
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number, 1 or more (default 1)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page, 1-50",
+                  "disabled": true
+                }
+              ]
+            }
           }
         },
         {
           "name": "Get my order by id",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{baseUrl}}/orders/{{orderId}}",
             "description": "Returns 404 (not 403) for an order that exists but belongs to someone else -- existence isn't leaked."
           }
@@ -551,8 +920,36 @@
           "name": "List orders containing my products",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
-            "url": "{{baseUrl}}/vendor/orders",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/vendor/orders?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "vendor",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number, 1 or more (default 1)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page, 1-50",
+                  "disabled": true
+                }
+              ]
+            },
             "description": "Each entry is grouped by order, but `items` and `vendorSubtotal` only ever include this vendor's own lines -- another vendor's products in the same order are never visible here."
           }
         },
@@ -560,7 +957,12 @@
           "name": "Get one order (my items only)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{vendorToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/vendor/orders/{{orderId}}",
             "description": "404 if this order has none of your products, even if the order itself exists for another vendor."
           }
@@ -570,11 +972,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{vendorToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{vendorToken}}"
+              }
             ],
             "url": "{{baseUrl}}/vendor/orders/{{orderId}}/status",
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"PROCESSING\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PROCESSING\"\n}"
+            },
             "description": "Only moves your own items, and only once the order is PAID (400 \"not been paid yet\" otherwise; payment already moves a paid order's items to CONFIRMED). Cancelling returns the stock and voids the commission. Allowed values: CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED. Must move forward one step at a time (PENDING -> CONFIRMED -> PROCESSING -> SHIPPED -> DELIVERED); CANCELLED is allowed from any non-terminal state. The order's overall status (visible to the customer) always reflects whichever vendor segment is the least far along."
           }
         }
@@ -1275,6 +1686,283 @@
       ]
     },
     {
+      "name": "Admin - Products (moderation)",
+      "item": [
+        {
+          "name": "List all products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has pagination\", () => pm.expect(pm.response.json().pagination).to.have.property(\"totalPages\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/products?search=mouse&status=ACTIVE&vendor={{vendorApplicationId}}&category={{categoryId}}&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "mouse",
+                  "description": "Product name or store name (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "description": "DRAFT | ACTIVE | ARCHIVED | OUT_OF_STOCK (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "vendor",
+                  "value": "{{vendorApplicationId}}",
+                  "description": "Vendor (store) id (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "{{categoryId}}",
+                  "description": "Category id (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number, 1 or more (default 1)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page, 1-50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Every product across all stores, including archived ones, with the vendor and category. Each product also says whether it was taken down by an admin."
+          }
+        },
+        {
+          "name": "Take down product (ARCHIVED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/products/{{productId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ARCHIVED\"\n}"
+            },
+            "description": "Removes the product from the marketplace. The vendor cannot re-publish it (their update gets 403) until an admin restores it. Written to the audit log."
+          }
+        },
+        {
+          "name": "Restore product (ACTIVE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/products/{{productId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "description": "Puts a taken-down product back on the marketplace and lifts the vendor's lock. Allowed values: ACTIVE, ARCHIVED."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Audit Logs",
+      "item": [
+        {
+          "name": "List audit logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Has logs and pagination\", () => { const b = pm.response.json(); pm.expect(b.logs).to.be.an(\"array\"); pm.expect(b.pagination).to.have.property(\"total\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?action=ORDER_STATUS_CHANGED&entityType=ORDER&source=webhook&actor=&from=2026-10-01&to=2026-10-31&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "ORDER_STATUS_CHANGED",
+                  "description": "PAYMENT_CREATED | PAYMENT_PAID | PAYMENT_FAILED | PAYMENT_CANCELLED | PAYMENT_REFUNDED | ORDER_STATUS_CHANGED | ORDER_AUTO_CANCELLED | VENDOR_STATUS_CHANGED | PRODUCT_STATUS_CHANGED | CATEGORY_CREATED | CATEGORY_UPDATED | CATEGORY_DELETED",
+                  "disabled": true
+                },
+                {
+                  "key": "entityType",
+                  "value": "ORDER",
+                  "description": "ORDER | PAYMENT | VENDOR | PRODUCT | CATEGORY",
+                  "disabled": true
+                },
+                {
+                  "key": "source",
+                  "value": "webhook",
+                  "description": "api | webhook | system",
+                  "disabled": true
+                },
+                {
+                  "key": "actor",
+                  "value": "",
+                  "description": "User id of who did it",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-10-01",
+                  "description": "YYYY-MM-DD",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "2026-10-31",
+                  "description": "YYYY-MM-DD",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number, 1 or more (default 1)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Items per page, 1-50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The permanent activity log, newest first. Entries are append-only: they cannot be edited or deleted, not even by an admin. Every entry has the action, who did it (actor + role, or the payment provider / the system), when, and metadata such as the old and new status."
+          }
+        },
+        {
+          "name": "Timeline of one order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?orderId={{orderId}}&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "orderId",
+                  "value": "{{orderId}}",
+                  "description": "Order id",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "1-50",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Everything that happened to one order: payment created, paid or failed, status changes, refunds and cancellations."
+          }
+        }
+      ]
+    },
+    {
       "name": "Admin - Dashboard Stats",
       "item": [
         {
@@ -1306,7 +1994,13 @@
     {
       "name": "Health",
       "item": [
-        { "name": "Health check", "request": { "method": "GET", "url": "{{baseUrl}}/health" } }
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        }
       ]
     }
   ]

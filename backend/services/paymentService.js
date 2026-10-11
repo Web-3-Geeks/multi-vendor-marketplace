@@ -1,16 +1,20 @@
+const mongoose = require("mongoose");
 const Order = require("../models/Order");
+const OrderItem = require("../models/OrderItem");
 const Payment = require("../models/Payment");
 const { ORDER_STATUS } = require("../constants/orderStatus");
 const { PAYMENT_STATUS } = require("../constants/paymentStatus");
-const { getProvider } = require("./payment");
-const mongoose = require("mongoose");
-const OrderItem = require("../models/OrderItem");
 const { COMMISSION_STATUS } = require("../constants/commissionStatus");
+const { AUDIT_ACTION, AUDIT_ENTITY, AUDIT_SOURCE } = require("../constants/audit");
+const { getProvider } = require("./payment");
 const { createCommissionsForOrder, setCommissionStatus } = require("./commissionService");
 const { cancelItems, recomputeOrderStatus } = require("./orderService");
+const { ORDER_TRANSITIONS, PAYMENT_TRANSITIONS, ORDER_PAYMENT_TRANSITIONS, fromStates } = require("./stateMachine");
+const audit = require("./auditService");
 
 const CURRENCY = "USD";
-const OPEN_STATUSES = [PAYMENT_STATUS.PENDING, PAYMENT_STATUS.PROCESSING];
+// "Open" = can still become PAID. Derived from the state machine, not hard-coded.
+const OPEN_STATUSES = fromStates(PAYMENT_TRANSITIONS, PAYMENT_STATUS.PAID);
 
 class PaymentError extends Error {
   constructor(message, statusCode = 400) {
@@ -44,29 +48,40 @@ const findOpenPayment = (orderId) =>
     expiresAt: { $gt: new Date() },
   });
 
-const createPaymentForOrder = async (userId, orderId) => {
-  const order = await Order.findOne({ _id: orderId, user: userId });
+const createPaymentForOrder = async (user, orderId) => {
+  const order = await Order.findOne({ _id: orderId, user: user._id });
   if (!order) throw new PaymentError("Order not found", 404);
   if (order.status === ORDER_STATUS.CANCELLED) {
     throw new PaymentError("A cancelled order cannot be paid");
   }
-  if (
-    [PAYMENT_STATUS.PAID, PAYMENT_STATUS.REFUNDED].includes(order.paymentStatus)
-  ) {
+  if ([PAYMENT_STATUS.PAID, PAYMENT_STATUS.REFUNDED].includes(order.paymentStatus)) {
     throw new PaymentError("This order has already been paid", 409);
   }
 
   const existing = await findOpenPayment(order._id);
   if (existing) return toCreateResponse(existing);
 
-  await Payment.updateMany(
-    {
-      order: order._id,
-      status: { $in: OPEN_STATUSES },
-      expiresAt: { $lte: new Date() },
-    },
-    { status: PAYMENT_STATUS.CANCELLED },
-  );
+  const expired = await Payment.find({
+    order: order._id,
+    status: { $in: OPEN_STATUSES },
+    expiresAt: { $lte: new Date() },
+  }).select("_id");
+  if (expired.length > 0) {
+    await Payment.updateMany(
+      { _id: { $in: expired.map((p) => p._id) }, status: { $in: fromStates(PAYMENT_TRANSITIONS, PAYMENT_STATUS.CANCELLED) } },
+      { status: PAYMENT_STATUS.CANCELLED },
+    );
+    for (const { _id } of expired) {
+      await audit.record({
+        source: AUDIT_SOURCE.SYSTEM,
+        action: AUDIT_ACTION.PAYMENT_CANCELLED,
+        entityType: AUDIT_ENTITY.PAYMENT,
+        entityId: _id,
+        order: order._id,
+        metadata: { reason: "Payment session expired" },
+      });
+    }
+  }
 
   const intent = await getProvider().createIntent({
     amount: order.totalAmount,
@@ -77,13 +92,21 @@ const createPaymentForOrder = async (userId, orderId) => {
   try {
     const payment = await Payment.create({
       order: order._id,
-      user: userId,
+      user: user._id,
       amount: order.totalAmount,
       currency: CURRENCY,
       provider: process.env.PAYMENT_PROVIDER,
       transactionId: intent.transactionId,
       paymentMethod: "card",
       expiresAt: intent.expiresAt,
+    });
+    await audit.record({
+      actor: user,
+      action: AUDIT_ACTION.PAYMENT_CREATED,
+      entityType: AUDIT_ENTITY.PAYMENT,
+      entityId: payment._id,
+      order: order._id,
+      metadata: { amount: payment.amount, currency: payment.currency, provider: payment.provider },
     });
     return toCreateResponse(payment);
   } catch (err) {
@@ -95,7 +118,14 @@ const createPaymentForOrder = async (userId, orderId) => {
   }
 };
 
-const settlePayment = async (paymentId, succeeded, eventId) => {
+// The one place a payment becomes PAID or FAILED, whether the news came from the
+// customer's verify call or from the provider's webhook. Everything happens in one
+// transaction, and the payment is claimed with a filter built from the state machine,
+// so when both arrive at once exactly one of them changes anything.
+// `context` is { actor, source } for the audit entry; the event id (webhooks only)
+// is remembered on the payment so a repeated event is ignored.
+const settlePayment = async (paymentId, succeeded, eventId, context = {}) => {
+  const target = succeeded ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.FAILED;
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
@@ -109,36 +139,63 @@ const settlePayment = async (paymentId, succeeded, eventId) => {
       }
 
       const payment = await Payment.findOneAndUpdate(
-        { _id: paymentId, status: { $in: OPEN_STATUSES } },
-        succeeded
-          ? { status: PAYMENT_STATUS.PAID, paidAt: new Date() }
-          : { status: PAYMENT_STATUS.FAILED },
+        { _id: paymentId, status: { $in: fromStates(PAYMENT_TRANSITIONS, target) } },
+        succeeded ? { status: PAYMENT_STATUS.PAID, paidAt: new Date() } : { status: PAYMENT_STATUS.FAILED },
         { returnDocument: "after", session },
       );
       if (!payment) return;
 
+      const orderUpdate = await Order.updateOne(
+        { _id: payment.order, paymentStatus: { $in: fromStates(ORDER_PAYMENT_TRANSITIONS, target) } },
+        { paymentStatus: target },
+        { session },
+      );
+
+      let orderConfirmed = false;
       if (succeeded) {
-        await Order.updateOne(
-          { _id: payment.order },
-          { paymentStatus: PAYMENT_STATUS.PAID },
-          { session },
-        );
-        await Order.updateOne(
-          { _id: payment.order, status: ORDER_STATUS.PENDING },
+        const confirmed = await Order.updateOne(
+          { _id: payment.order, status: { $in: fromStates(ORDER_TRANSITIONS, ORDER_STATUS.CONFIRMED) } },
           { status: ORDER_STATUS.CONFIRMED },
           { session },
         );
+        orderConfirmed = confirmed.modifiedCount === 1;
         await OrderItem.updateMany(
           { order: payment.order, status: ORDER_STATUS.PENDING },
           { status: ORDER_STATUS.CONFIRMED },
           { session },
         );
         await createCommissionsForOrder(payment.order, session);
-      } else {
-        await Order.updateOne(
-          { _id: payment.order },
-          { paymentStatus: PAYMENT_STATUS.FAILED },
-          { session },
+      }
+
+      await audit.record(
+        {
+          actor: context.actor,
+          source: context.source,
+          action: succeeded ? AUDIT_ACTION.PAYMENT_PAID : AUDIT_ACTION.PAYMENT_FAILED,
+          entityType: AUDIT_ENTITY.PAYMENT,
+          entityId: payment._id,
+          order: payment.order,
+          metadata: {
+            amount: payment.amount,
+            transactionId: payment.transactionId,
+            orderPaymentStatusUpdated: orderUpdate.modifiedCount === 1,
+            ...(eventId ? { eventId } : {}),
+          },
+        },
+        session,
+      );
+      if (orderConfirmed) {
+        await audit.record(
+          {
+            actor: context.actor,
+            source: context.source,
+            action: AUDIT_ACTION.ORDER_STATUS_CHANGED,
+            entityType: AUDIT_ENTITY.ORDER,
+            entityId: payment.order,
+            order: payment.order,
+            metadata: { orderStatusFrom: ORDER_STATUS.PENDING, orderStatusTo: ORDER_STATUS.CONFIRMED, reason: "Payment confirmed" },
+          },
+          session,
         );
       }
     });
@@ -149,19 +206,15 @@ const settlePayment = async (paymentId, succeeded, eventId) => {
   return Payment.findById(paymentId);
 };
 
-const verifyPayment = async (userId, transactionId) => {
-  const payment = await Payment.findOne({ transactionId, user: userId });
+const verifyPayment = async (user, transactionId) => {
+  const payment = await Payment.findOne({ transactionId, user: user._id });
   if (!payment) throw new PaymentError("Payment not found", 404);
   if (!OPEN_STATUSES.includes(payment.status)) return toPaymentDTO(payment);
 
   const txn = await getProvider().retrieve(transactionId);
-  if (!txn)
-    throw new PaymentError(
-      "Payment provider does not recognise this transaction",
-      502,
-    );
+  if (!txn) throw new PaymentError("Payment provider does not recognise this transaction", 502);
 
-  const order = await Order.findOne({ _id: payment.order, user: userId });
+  const order = await Order.findOne({ _id: payment.order, user: user._id });
   const matches =
     order &&
     txn.orderId === String(order._id) &&
@@ -169,22 +222,29 @@ const verifyPayment = async (userId, transactionId) => {
     txn.amount === payment.amount &&
     txn.currency === payment.currency;
   if (!matches) {
-    console.error(
-      `Payment ${payment._id} failed verification: provider data does not match the order`,
-    );
+    console.error(`Payment ${payment._id} failed verification: provider data does not match the order`);
     throw new PaymentError("Payment details do not match the order");
   }
 
-  if (txn.status === "succeeded")
-    return toPaymentDTO(await settlePayment(payment._id, true));
-  if (txn.status === "failed")
-    return toPaymentDTO(await settlePayment(payment._id, false));
+  const context = { actor: user, source: AUDIT_SOURCE.API };
+  if (txn.status === "succeeded") return toPaymentDTO(await settlePayment(payment._id, true, undefined, context));
+  if (txn.status === "failed") return toPaymentDTO(await settlePayment(payment._id, false, undefined, context));
 
   if (txn.expiresAt <= new Date()) {
-    await Payment.updateOne(
-      { _id: payment._id, status: { $in: OPEN_STATUSES } },
+    const cancelled = await Payment.updateOne(
+      { _id: payment._id, status: { $in: fromStates(PAYMENT_TRANSITIONS, PAYMENT_STATUS.CANCELLED) } },
       { status: PAYMENT_STATUS.CANCELLED },
     );
+    if (cancelled.modifiedCount === 1) {
+      await audit.record({
+        actor: user,
+        action: AUDIT_ACTION.PAYMENT_CANCELLED,
+        entityType: AUDIT_ENTITY.PAYMENT,
+        entityId: payment._id,
+        order: payment.order,
+        metadata: { reason: "Payment session expired" },
+      });
+    }
     return toPaymentDTO(await Payment.findById(payment._id));
   }
 
@@ -197,53 +257,34 @@ const handleWebhookEvent = async (event) => {
   if (!Object.hasOwn(WEBHOOK_OUTCOMES, event.type)) return;
 
   const { transactionId, orderId, amount, currency } = event.data || {};
-  const payment =
-    typeof transactionId === "string" ? await Payment.findOne({ transactionId }) : null;
+  const payment = typeof transactionId === "string" ? await Payment.findOne({ transactionId }) : null;
   if (!payment) {
-    console.error(
-      `Webhook ${event.id}: no payment for transaction ${transactionId}`,
-    );
+    console.error(`Webhook ${event.id}: no payment for transaction ${transactionId}`);
     return;
   }
 
   const matches =
-    String(payment.order) === orderId &&
-    payment.amount === amount &&
-    payment.currency === currency;
+    String(payment.order) === orderId && payment.amount === amount && payment.currency === currency;
   if (!matches) {
-    console.error(
-      `Webhook ${event.id}: event data does not match payment ${payment._id}`,
-    );
+    console.error(`Webhook ${event.id}: event data does not match payment ${payment._id}`);
     return;
   }
 
-  await settlePayment(payment._id, WEBHOOK_OUTCOMES[event.type], event.id);
+  await settlePayment(payment._id, WEBHOOK_OUTCOMES[event.type], event.id, { source: AUDIT_SOURCE.WEBHOOK });
 };
 
-const simulateMockPayment = async (
-  userId,
-  transactionId,
-  outcome,
-  deliverWebhook = true,
-) => {
-  if (process.env.PAYMENT_PROVIDER !== "mock")
-    throw new PaymentError("Not found", 404);
+const simulateMockPayment = async (user, transactionId, outcome, deliverWebhook = true) => {
+  if (process.env.PAYMENT_PROVIDER !== "mock") throw new PaymentError("Not found", 404);
 
-  const payment = await Payment.findOne({ transactionId, user: userId });
+  const payment = await Payment.findOne({ transactionId, user: user._id });
   if (!payment) throw new PaymentError("Payment not found", 404);
 
   const provider = getProvider();
-  const delivery = await provider.simulateCustomerPayment(
-    transactionId,
-    outcome,
-  );
-  if (!delivery)
-    throw new PaymentError("This payment session is no longer open");
+  const delivery = await provider.simulateCustomerPayment(transactionId, outcome);
+  if (!delivery) throw new PaymentError("This payment session is no longer open");
 
   if (deliverWebhook) {
-    await handleWebhookEvent(
-      provider.verifyWebhook(delivery.rawBody, delivery.signature),
-    );
+    await handleWebhookEvent(provider.verifyWebhook(delivery.rawBody, delivery.signature));
   }
   return toPaymentDTO(await Payment.findById(payment._id));
 };
@@ -275,7 +316,7 @@ const toAdminPaymentDTO = (payment) => ({
     : null,
 });
 
-const refundPayment = async (adminId, paymentId, reason) => {
+const refundPayment = async (admin, paymentId, reason) => {
   const payment = await Payment.findById(paymentId);
   if (!payment) throw new PaymentError("Payment not found", 404);
   if (payment.status === PAYMENT_STATUS.REFUNDED) {
@@ -291,20 +332,21 @@ const refundPayment = async (adminId, paymentId, reason) => {
   try {
     await session.withTransaction(async () => {
       const refunded = await Payment.findOneAndUpdate(
-        { _id: payment._id, status: PAYMENT_STATUS.PAID },
+        { _id: payment._id, status: { $in: fromStates(PAYMENT_TRANSITIONS, PAYMENT_STATUS.REFUNDED) } },
         {
           status: PAYMENT_STATUS.REFUNDED,
           refundId,
           refundedAt: new Date(),
           refundReason: reason,
-          refundedBy: adminId,
+          refundedBy: admin._id,
         },
         { session },
       );
       if (!refunded) return;
 
+      const orderBefore = await Order.findById(payment.order).session(session);
       await Order.updateOne(
-        { _id: payment.order },
+        { _id: payment.order, paymentStatus: { $in: fromStates(ORDER_PAYMENT_TRANSITIONS, PAYMENT_STATUS.REFUNDED) } },
         { paymentStatus: PAYMENT_STATUS.REFUNDED },
         { session },
       );
@@ -317,9 +359,40 @@ const refundPayment = async (adminId, paymentId, reason) => {
         order: payment.order,
         status: { $nin: [ORDER_STATUS.CANCELLED, ORDER_STATUS.DELIVERED] },
       }).session(session);
+      let orderStatusAfter = orderBefore.status;
       if (items.length > 0) {
         await cancelItems(items, session);
-        await recomputeOrderStatus(payment.order, session);
+        orderStatusAfter = await recomputeOrderStatus(payment.order, session);
+      }
+
+      await audit.record(
+        {
+          actor: admin,
+          action: AUDIT_ACTION.PAYMENT_REFUNDED,
+          entityType: AUDIT_ENTITY.PAYMENT,
+          entityId: payment._id,
+          order: payment.order,
+          metadata: {
+            amount: payment.amount,
+            refundId,
+            reason: reason || null,
+            cancelledItems: items.length,
+          },
+        },
+        session,
+      );
+      if (orderStatusAfter !== orderBefore.status) {
+        await audit.record(
+          {
+            actor: admin,
+            action: AUDIT_ACTION.ORDER_STATUS_CHANGED,
+            entityType: AUDIT_ENTITY.ORDER,
+            entityId: payment.order,
+            order: payment.order,
+            metadata: { orderStatusFrom: orderBefore.status, orderStatusTo: orderStatusAfter, reason: "Payment refunded" },
+          },
+          session,
+        );
       }
     });
   } catch (err) {

@@ -18,4 +18,9 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Test helpers export plain functions next to components; fast refresh doesn't apply.
+    files: ['src/test/**', '**/*.test.{js,jsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ])

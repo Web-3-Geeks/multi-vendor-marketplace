@@ -1,12 +1,21 @@
 const Category = require("../models/Category");
 const Product = require("../models/Product");
 const slugify = require("../utils/slugify");
+const { AUDIT_ACTION, AUDIT_ENTITY } = require("../constants/audit");
+const audit = require("../services/auditService");
 
 const createCategory = async (req, res) => {
   const { name, description } = req.body;
   const slug = slugify(name);
 
   const category = await Category.create({ name, slug, description });
+  await audit.record({
+    actor: req.user,
+    action: AUDIT_ACTION.CATEGORY_CREATED,
+    entityType: AUDIT_ENTITY.CATEGORY,
+    entityId: category._id,
+    metadata: { name: category.name },
+  });
 
   res.status(201).json({ category });
 };
@@ -33,6 +42,13 @@ const updateCategory = async (req, res) => {
   }
 
   await category.save();
+  await audit.record({
+    actor: req.user,
+    action: AUDIT_ACTION.CATEGORY_UPDATED,
+    entityType: AUDIT_ENTITY.CATEGORY,
+    entityId: category._id,
+    metadata: { name: category.name },
+  });
 
   res.json({ category });
 };
@@ -51,6 +67,13 @@ const deleteCategory = async (req, res) => {
   }
 
   await category.deleteOne();
+  await audit.record({
+    actor: req.user,
+    action: AUDIT_ACTION.CATEGORY_DELETED,
+    entityType: AUDIT_ENTITY.CATEGORY,
+    entityId: category._id,
+    metadata: { name: category.name },
+  });
   res.json({ message: "Category deleted" });
 };
 

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Package, Search, Store } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { useAuth } from '../../hooks/useAuth'
+import { useNotice } from '../../hooks/useNotice'
 import { apiRequest } from '../../lib/api'
 import { formatDate, formatDateTime, formatPrice } from '../../lib/format'
 import {
@@ -16,7 +17,9 @@ import {
 import { EmptyState, Panel } from '../dashboard/widgets'
 import Pagination from '../marketplace/Pagination'
 import Alert from '../ui/Alert'
+import AuditTimeline from './AuditTimeline'
 import Badge from '../ui/Badge'
+import ConfirmDialog from '../ui/ConfirmDialog'
 import Modal from '../ui/Modal'
 import SelectField from '../ui/SelectField'
 import Spinner from '../ui/Spinner'
@@ -54,6 +57,7 @@ function ActionButton({ tone, children, ...props }) {
 
 function OrderDetailModal({ orderId, onClose }) {
   const { data, loading, error } = useApi(`/admin/orders/${orderId}`, { auth: true })
+  const { data: activity, loading: activityLoading } = useApi(`/admin/audit-logs?orderId=${orderId}&limit=50`, { auth: true })
   const order = data?.order
 
   const vendors = new Map()
@@ -132,6 +136,17 @@ function OrderDetailModal({ orderId, onClose }) {
             )}
           </div>
 
+          <div>
+            <p className="mb-3 text-sm font-semibold">Activity</p>
+            {activityLoading && !activity ? (
+              <Spinner label="Loading activity..." />
+            ) : activity?.logs.length ? (
+              <AuditTimeline logs={activity.logs} />
+            ) : (
+              <p className="text-sm text-slate-500">No activity has been recorded for this order yet.</p>
+            )}
+          </div>
+
           <dl className="space-y-1.5 border-t border-slate-100 pt-4 text-sm">
             <div className="flex justify-between">
               <dt className="text-slate-500">Subtotal</dt>
@@ -160,6 +175,8 @@ function AdminOrdersPanel() {
   const [detailId, setDetailId] = useState(null)
   const [busyId, setBusyId] = useState(null)
   const [actionError, setActionError] = useState('')
+  const [notice, showNotice] = useNotice()
+  const [cancelTarget, setCancelTarget] = useState(null)
 
   const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) })
   for (const [key, value] of Object.entries(filters)) {
@@ -177,12 +194,17 @@ function AdminOrdersPanel() {
     applyFilter({ search: searchInput.trim() })
   }
 
+  const applyStatus = async (order, status) => {
+    await apiRequest(`/admin/orders/${order.id}/status`, { method: 'PATCH', token, body: { status } })
+    showNotice(`Order #${order.id.slice(-8).toUpperCase()} marked as ${readableStatus(status)}.`)
+    reload()
+  }
+
   const setStatus = async (order, status) => {
     setActionError('')
     setBusyId(order.id)
     try {
-      await apiRequest(`/admin/orders/${order.id}/status`, { method: 'PATCH', token, body: { status } })
-      reload()
+      await applyStatus(order, status)
     } catch (err) {
       setActionError(err.message)
     } finally {
@@ -227,6 +249,11 @@ function AdminOrdersPanel() {
         />
       </div>
 
+      {notice && (
+        <div className="mb-3">
+          <Alert variant="success">{notice}</Alert>
+        </div>
+      )}
       {actionError && (
         <div className="mb-3">
           <Alert>{actionError}</Alert>
@@ -276,7 +303,7 @@ function AdminOrdersPanel() {
                     </ActionButton>
                   )}
                   {canCancel && (
-                    <ActionButton tone="rose" disabled={busy} onClick={() => setStatus(order, ORDER_STATUS.CANCELLED)}>
+                    <ActionButton tone="rose" disabled={busy} onClick={() => setCancelTarget(order)}>
                       Cancel
                     </ActionButton>
                   )}
@@ -290,6 +317,24 @@ function AdminOrdersPanel() {
       {data && <Pagination page={page} totalPages={data.pagination.totalPages} onChange={setPage} />}
 
       {detailId && <OrderDetailModal orderId={detailId} onClose={() => setDetailId(null)} />}
+
+      {cancelTarget && (
+        <ConfirmDialog
+          title="Cancel this order?"
+          confirmLabel="Cancel order"
+          message={
+            <p>
+              Order #{cancelTarget.id.slice(-8).toUpperCase()} ({formatPrice(cancelTarget.totalAmount)}) will be cancelled and
+              its items returned to stock. This can't be undone.
+            </p>
+          }
+          onCancel={() => setCancelTarget(null)}
+          onConfirm={async () => {
+            await applyStatus(cancelTarget, ORDER_STATUS.CANCELLED)
+            setCancelTarget(null)
+          }}
+        />
+      )}
     </Panel>
   )
 }

@@ -105,7 +105,7 @@ const updateOrderStatus = async (req, res) => {
     throw new OrderError("A paid order must be refunded to be cancelled");
   }
 
-  await updateItemsStatus(order._id, status, { activeOnly: true });
+  await updateItemsStatus(order._id, status, { activeOnly: true, actor: req.user });
 
   res.json({ order: await loadAdminOrder(order._id) });
 };

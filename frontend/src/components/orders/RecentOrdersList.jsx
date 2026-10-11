@@ -8,14 +8,14 @@ import Badge from '../ui/Badge'
 import Spinner from '../ui/Spinner'
 
 function RecentOrdersList({ limit = 3 }) {
-  const { data, loading } = useApi('/orders', { auth: true })
+  const { data, loading } = useApi(`/orders?limit=${limit}`, { auth: true })
   const orders = data?.orders.slice(0, limit) || []
 
   return (
     <Panel
       title="Recent orders"
       action={
-        data?.orders.length > 0 && (
+        data?.pagination.total > 0 && (
           <Link to="/orders" className="text-xs font-semibold text-indigo-600 hover:text-indigo-500">
             View all
           </Link>

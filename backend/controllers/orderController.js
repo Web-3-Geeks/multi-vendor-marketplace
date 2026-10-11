@@ -1,8 +1,10 @@
+const { matchedData } = require("express-validator");
 const { listOrdersForUser, getOrderForUser } = require("../services/orderService");
+const { pageParams } = require("../utils/pagination");
 
 const listMyOrders = async (req, res) => {
-  const orders = await listOrdersForUser(req.user._id);
-  res.json({ orders });
+  const query = matchedData(req, { locations: ["query"] });
+  res.json(await listOrdersForUser(req.user._id, pageParams(query, 10)));
 };
 
 const getMyOrder = async (req, res) => {

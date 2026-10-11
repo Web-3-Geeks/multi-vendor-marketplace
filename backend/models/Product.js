@@ -61,6 +61,8 @@ const productSchema = new mongoose.Schema(
       enum: Object.values(PRODUCT_STATUS),
       default: PRODUCT_STATUS.DRAFT,
     },
+    // Set when an admin takes the product down. While true the vendor cannot publish it again.
+    takenDownByAdmin: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
@@ -75,5 +77,7 @@ productSchema.pre("validate", function () {
 productSchema.index({ vendor: 1 });
 productSchema.index({ category: 1 });
 productSchema.index({ status: 1 });
+productSchema.index({ status: 1, createdAt: -1 });
+productSchema.index({ status: 1, price: 1 });
 
 module.exports = mongoose.model("Product", productSchema);

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 function Modal({ title, description, onClose, children, size = 'md' }) {
@@ -18,7 +19,10 @@ function Modal({ title, description, onClose, children, size = 'md' }) {
     }
   }, [onClose])
 
-  return (
+  // Rendered into <body>: the dashboard panels use backdrop-blur, and an ancestor with a
+  // backdrop filter becomes the containing block of position:fixed children, which would
+  // squeeze the dialog into the panel instead of the whole screen.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-6">
       <button
         type="button"
@@ -52,7 +56,8 @@ function Modal({ title, description, onClose, children, size = 'md' }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

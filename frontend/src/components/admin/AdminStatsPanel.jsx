@@ -6,6 +6,7 @@ import {
   CircleX,
   Clock,
   CreditCard,
+  History,
   Package,
   Percent,
   ShoppingBag,
@@ -23,8 +24,9 @@ const QUICK_LINKS = [
   { label: 'Orders', icon: Package, to: '/admin#orders' },
   { label: 'Payments', icon: CreditCard, to: '/admin#payments' },
   { label: 'Vendors', icon: Store, to: '/admin#vendors' },
-  { label: 'Products', icon: Boxes, to: '/products' },
+  { label: 'Products', icon: Boxes, to: '/admin#products' },
   { label: 'Categories', icon: Tags, to: '/admin#categories' },
+  { label: 'Activity', icon: History, to: '/admin#activity' },
 ]
 
 function Stat({ icon: Icon, label, value, tone = 'text-slate-900' }) {

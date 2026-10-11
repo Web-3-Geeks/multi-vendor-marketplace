@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Boxes, Plus, TriangleAlert } from 'lucide-react'
+import { Boxes, Plus, Search, TriangleAlert } from 'lucide-react'
 import { ROLE_CONFIG } from '../../constants/roleConfig'
 import { VENDOR_STATUS, VENDOR_STATUS_MESSAGE, VENDOR_STATUS_TONE, readableStatus } from '../../constants/status'
 import { useApi } from '../../hooks/useApi'
@@ -11,33 +11,42 @@ import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import Alert from '../../components/ui/Alert'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import Pagination from '../../components/marketplace/Pagination'
+import { useNotice } from '../../hooks/useNotice'
 import VendorProductRow from '../../components/vendor/VendorProductRow'
 import ProductFormModal from '../../components/vendor/ProductFormModal'
 import VendorOrdersPanel from '../../components/vendor/VendorOrdersPanel'
 import VendorEarningsPanel from '../../components/vendor/VendorEarningsPanel'
 
+const PRODUCT_PAGE_SIZE = 10
+
 function VendorDashboard({ user }) {
   const config = ROLE_CONFIG[user.role]
   const { token } = useAuth()
   const { data: storeData, loading: storeLoading } = useApi('/vendors/me', { auth: true })
-  const { data: productData, loading: productsLoading, reload: reloadProducts } = useApi('/vendor/products', {
-    auth: true,
-  })
+  const [productPage, setProductPage] = useState(1)
+  const [productSearch, setProductSearch] = useState('')
+  const [productSearchInput, setProductSearchInput] = useState('')
+  const productParams = new URLSearchParams({ page: String(productPage), limit: String(PRODUCT_PAGE_SIZE) })
+  if (productSearch) productParams.set('search', productSearch)
+  const { data: productData, loading: productsLoading, reload: reloadProducts } = useApi(
+    `/vendor/products?${productParams}`,
+    { auth: true },
+  )
   const { data: categoryData } = useApi('/categories')
   const [modalProduct, setModalProduct] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [actionError, setActionError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [archiveTarget, setArchiveTarget] = useState(null)
+  const [notice, showNotice] = useNotice()
 
   const vendor = storeData?.vendor
   const products = productData?.products || []
   const categories = categoryData?.categories || []
 
-  const counts = {
-    total: products.length,
-    active: products.filter((p) => p.status === 'ACTIVE').length,
-    outOfStock: products.filter((p) => p.status === 'OUT_OF_STOCK').length,
-  }
+  const counts = productData?.summary || { total: 0, active: 0, outOfStock: 0 }
 
   const openCreate = () => {
     setModalProduct(null)
@@ -50,20 +59,22 @@ function VendorDashboard({ user }) {
   const closeModal = () => setShowModal(false)
   const handleSaved = () => {
     setShowModal(false)
+    showNotice('Product saved.')
     reloadProducts()
   }
 
+  const submitProductSearch = (e) => {
+    e.preventDefault()
+    setProductSearch(productSearchInput.trim())
+    setProductPage(1)
+  }
+
   const handleArchive = async (product) => {
-    setActionError('')
-    setBusyId(product._id)
-    try {
-      await apiRequest(`/vendor/products/${product._id}`, { method: 'DELETE', token })
-      reloadProducts()
-    } catch (err) {
-      setActionError(err.message)
-    } finally {
-      setBusyId(null)
-    }
+    await apiRequest(`/vendor/products/${product._id}`, { method: 'DELETE', token })
+    showNotice(`"${product.name}" was archived.`)
+    // Archiving the last row of a later page would leave that page empty: step back one.
+    if (products.length === 1 && productPage > 1) setProductPage(productPage - 1)
+    reloadProducts()
   }
 
   const handleStockChange = async (product, stock) => {
@@ -135,18 +146,41 @@ function VendorDashboard({ user }) {
               </Button>
             }
           >
+            <form onSubmit={submitProductSearch} className="relative mb-3 max-w-xs">
+              <label htmlFor="vendor-product-search" className="sr-only">
+                Search your products
+              </label>
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <input
+                id="vendor-product-search"
+                value={productSearchInput}
+                onChange={(e) => setProductSearchInput(e.target.value)}
+                placeholder="Search your products"
+                maxLength={100}
+                className="block w-full rounded-xl border border-slate-200 bg-white/80 py-2 pl-9 pr-3 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+              />
+            </form>
+            {notice && (
+              <div className="mb-3">
+                <Alert variant="success">{notice}</Alert>
+              </div>
+            )}
             {actionError && (
               <div className="mb-3">
                 <Alert>{actionError}</Alert>
               </div>
             )}
-            {productsLoading ? (
-              <Spinner label="Loading products..." />
+            {!productData ? (
+              productsLoading && <Spinner label="Loading products..." />
             ) : products.length === 0 ? (
               <EmptyState
                 icon={Boxes}
-                title="No products yet"
-                text="Add your first product to start selling on the marketplace."
+                title={productSearch ? 'No products match' : 'No products yet'}
+                text={
+                  productSearch
+                    ? 'Try a different search.'
+                    : 'Add your first product to start selling on the marketplace.'
+                }
               />
             ) : (
               <div className="overflow-x-auto">
@@ -166,7 +200,7 @@ function VendorDashboard({ user }) {
                         key={product._id}
                         product={product}
                         onEdit={openEdit}
-                        onArchive={handleArchive}
+                        onArchive={setArchiveTarget}
                         onStockChange={handleStockChange}
                         busy={busyId === product._id}
                       />
@@ -175,8 +209,33 @@ function VendorDashboard({ user }) {
                 </table>
               </div>
             )}
+            {productData && (
+              <Pagination
+                page={productPage}
+                totalPages={productData.pagination.totalPages}
+                onChange={setProductPage}
+              />
+            )}
           </Panel>
         </>
+      )}
+
+      {archiveTarget && (
+        <ConfirmDialog
+          title="Archive this product?"
+          confirmLabel="Archive"
+          message={
+            <p>
+              "{archiveTarget.name}" will disappear from the marketplace. Existing orders are not affected, and you
+              can publish it again later by editing it.
+            </p>
+          }
+          onCancel={() => setArchiveTarget(null)}
+          onConfirm={async () => {
+            await handleArchive(archiveTarget)
+            setArchiveTarget(null)
+          }}
+        />
       )}
 
       {isApproved && (

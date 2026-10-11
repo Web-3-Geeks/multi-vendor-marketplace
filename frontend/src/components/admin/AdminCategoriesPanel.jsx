@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pencil, Tag, Trash2, X } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { useAuth } from '../../hooks/useAuth'
+import { useNotice } from '../../hooks/useNotice'
 import { apiRequest } from '../../lib/api'
 import { toFieldErrors } from '../../lib/formErrors'
 import { Panel, EmptyState } from '../dashboard/widgets'
@@ -9,6 +10,7 @@ import TextField from '../ui/TextField'
 import TextArea from '../ui/TextArea'
 import Button from '../ui/Button'
 import Alert from '../ui/Alert'
+import ConfirmDialog from '../ui/ConfirmDialog'
 import Spinner from '../ui/Spinner'
 
 const emptyForm = { name: '', description: '' }
@@ -22,7 +24,8 @@ function AdminCategoriesPanel() {
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
-  const [busyId, setBusyId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [notice, showNotice] = useNotice()
 
   const categories = data?.categories || []
 
@@ -54,8 +57,10 @@ function AdminCategoriesPanel() {
     try {
       if (editingId) {
         await apiRequest(`/categories/${editingId}`, { method: 'PATCH', token, body: form })
+        showNotice(`Category "${form.name}" updated.`)
       } else {
         await apiRequest('/categories', { method: 'POST', token, body: form })
+        showNotice(`Category "${form.name}" added.`)
       }
       cancelEdit()
       reload()
@@ -68,16 +73,9 @@ function AdminCategoriesPanel() {
   }
 
   const handleDelete = async (category) => {
-    setDeleteError('')
-    setBusyId(category._id)
-    try {
-      await apiRequest(`/categories/${category._id}`, { method: 'DELETE', token })
-      reload()
-    } catch (err) {
-      setDeleteError(err.message)
-    } finally {
-      setBusyId(null)
-    }
+    await apiRequest(`/categories/${category._id}`, { method: 'DELETE', token })
+    showNotice(`Category "${category.name}" deleted.`)
+    reload()
   }
 
   return (
@@ -122,6 +120,11 @@ function AdminCategoriesPanel() {
         </Button>
       </form>
 
+      {notice && (
+        <div className="mb-3">
+          <Alert variant="success">{notice}</Alert>
+        </div>
+      )}
       {deleteError && (
         <div className="mb-3">
           <Alert>{deleteError}</Alert>
@@ -156,10 +159,12 @@ function AdminCategoriesPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDelete(category)}
-                  disabled={busyId === category._id}
+                  onClick={() => {
+                    setDeleteError('')
+                    setDeleteTarget(category)
+                  }}
                   aria-label={`Delete ${category.name}`}
-                  className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                  className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -167,6 +172,22 @@ function AdminCategoriesPanel() {
             </li>
           ))}
         </ul>
+      )}
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete this category?"
+          confirmLabel="Delete"
+          message={
+            <p>
+              "{deleteTarget.name}" will be removed for good. Categories that products still use can't be deleted.
+            </p>
+          }
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={async () => {
+            await handleDelete(deleteTarget)
+            setDeleteTarget(null)
+          }}
+        />
       )}
     </Panel>
   )

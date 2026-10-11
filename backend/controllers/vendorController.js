@@ -1,4 +1,6 @@
+const { matchedData } = require("express-validator");
 const Vendor = require("../models/Vendor");
+const { pageParams, pageInfo } = require("../utils/pagination");
 const VENDOR_STATUS = require("../constants/vendorStatus");
 
 const toVendorResponse = (vendor) => ({
@@ -42,8 +44,16 @@ const getMyApplication = async (req, res) => {
 };
 
 const listPublicVendors = async (req, res) => {
-  const vendors = await Vendor.find({ status: VENDOR_STATUS.APPROVED }).sort({ storeName: 1 });
-  res.json({ vendors: vendors.map(toPublicVendor) });
+  const query = matchedData(req, { locations: ["query"] });
+  const { page, limit, skip } = pageParams(query);
+  const filter = { status: VENDOR_STATUS.APPROVED };
+
+  const [vendors, total] = await Promise.all([
+    Vendor.find(filter).sort({ storeName: 1 }).skip(skip).limit(limit),
+    Vendor.countDocuments(filter),
+  ]);
+
+  res.json({ vendors: vendors.map(toPublicVendor), pagination: pageInfo(page, limit, total) });
 };
 
 const getPublicVendor = async (req, res) => {

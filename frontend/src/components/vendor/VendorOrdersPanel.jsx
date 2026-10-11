@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Package } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { useAuth } from '../../hooks/useAuth'
+import { useNotice } from '../../hooks/useNotice'
 import { apiRequest } from '../../lib/api'
 import { formatDate, formatPrice } from '../../lib/format'
 import {
@@ -12,22 +13,30 @@ import {
   readableStatus,
 } from '../../constants/status'
 import { EmptyState, Panel } from '../dashboard/widgets'
+import Pagination from '../marketplace/Pagination'
 import Badge from '../ui/Badge'
+import ConfirmDialog from '../ui/ConfirmDialog'
 import Spinner from '../ui/Spinner'
 import Alert from '../ui/Alert'
 import { AddressLines } from '../orders/ShippingAddress'
 
+const PAGE_SIZE = 10
+
 function VendorOrdersPanel() {
   const { token } = useAuth()
-  const { data, loading, error, reload } = useApi('/vendor/orders', { auth: true })
+  const [page, setPage] = useState(1)
+  const { data, loading, error, reload } = useApi(`/vendor/orders?page=${page}&limit=${PAGE_SIZE}`, { auth: true })
   const [busyId, setBusyId] = useState(null)
   const [actionError, setActionError] = useState('')
+  const [notice, showNotice] = useNotice()
+  const [cancelTarget, setCancelTarget] = useState(null)
 
   const setStatus = async (orderId, status) => {
     setActionError('')
     setBusyId(orderId)
     try {
       await apiRequest(`/vendor/orders/${orderId}/status`, { method: 'PATCH', token, body: { status } })
+      showNotice(`Order #${orderId.slice(-8).toUpperCase()} marked as ${readableStatus(status)}.`)
       reload()
     } catch (err) {
       setActionError(err.message)
@@ -40,6 +49,11 @@ function VendorOrdersPanel() {
 
   return (
     <Panel title="Orders">
+      {notice && (
+        <div className="mb-3">
+          <Alert variant="success">{notice}</Alert>
+        </div>
+      )}
       {actionError && (
         <div className="mb-3">
           <Alert>{actionError}</Alert>
@@ -51,12 +65,12 @@ function VendorOrdersPanel() {
         </div>
       )}
 
-      {loading ? (
-        <Spinner label="Loading orders..." />
+      {!data ? (
+        loading && <Spinner label="Loading orders..." />
       ) : orders.length === 0 ? (
         <EmptyState icon={Package} title="No orders yet" text="Orders for your products will show up here." />
       ) : (
-        <ul className="space-y-3">
+        <ul aria-busy={loading} className={`space-y-3 transition-opacity ${loading ? 'opacity-60' : ''}`}>
           {orders.map((order) => {
             const segmentStatus = order.items[0]?.status
             const paid = order.paymentStatus === PAYMENT_STATUS.PAID
@@ -102,14 +116,14 @@ function VendorOrdersPanel() {
                   )
                 )}
 
-                <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                   <p className="text-sm font-semibold">Your total: {formatPrice(order.vendorSubtotal)}</p>
                   <div className="flex gap-1.5">
                     {canCancel && (
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => setStatus(order.orderId, ORDER_STATUS.CANCELLED)}
+                        onClick={() => setCancelTarget(order)}
                         className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Cancel
@@ -131,6 +145,32 @@ function VendorOrdersPanel() {
             )
           })}
         </ul>
+      )}
+
+      {data && <Pagination page={page} totalPages={data.pagination.totalPages} onChange={setPage} />}
+
+      {cancelTarget && (
+        <ConfirmDialog
+          title="Cancel your part of this order?"
+          confirmLabel="Cancel items"
+          message={
+            <p>
+              Your items in order #{cancelTarget.orderId.slice(-8).toUpperCase()} will be cancelled and returned to
+              stock, and the earnings for them are voided. This can't be undone.
+            </p>
+          }
+          onCancel={() => setCancelTarget(null)}
+          onConfirm={async () => {
+            await apiRequest(`/vendor/orders/${cancelTarget.orderId}/status`, {
+              method: 'PATCH',
+              token,
+              body: { status: ORDER_STATUS.CANCELLED },
+            })
+            showNotice(`Your items in order #${cancelTarget.orderId.slice(-8).toUpperCase()} were cancelled.`)
+            setCancelTarget(null)
+            reload()
+          }}
+        />
       )}
     </Panel>
   )

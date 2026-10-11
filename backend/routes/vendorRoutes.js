@@ -8,11 +8,12 @@ const {
 const { applyVendorRules } = require("../validators/vendorValidators");
 const { authenticate, requireRole } = require("../middleware/auth");
 const validate = require("../middleware/validate");
+const { paginationRules } = require("../validators/queryRules");
 const ROLES = require("../constants/roles");
 
 const router = express.Router();
 
-router.get("/", listPublicVendors);
+router.get("/", paginationRules, validate, listPublicVendors);
 router.get("/me", authenticate, getMyApplication);
 router.get("/:id", getPublicVendor);
 router.post("/", authenticate, requireRole(ROLES.CUSTOMER), applyVendorRules, validate, applyAsVendor);

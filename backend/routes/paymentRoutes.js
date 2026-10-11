@@ -14,15 +14,16 @@ const {
 } = require("../validators/paymentValidators");
 const { authenticate } = require("../middleware/auth");
 const validate = require("../middleware/validate");
+const { paymentLimiter } = require("../middleware/rateLimit");
 
 const router = express.Router();
 
 router.post("/webhook", webhookHandler);
 
-router.get("/order/:orderId", authenticate, orderPaymentRules, validate, getOrderPayment);
-router.post("/create", authenticate, createPaymentRules, validate, createPayment);
-router.post("/verify", authenticate, verifyPaymentRules, validate, verifyPaymentHandler);
-router.post("/mock/pay", authenticate, simulatePaymentRules, validate, simulatePaymentHandler);
+router.get("/order/:orderId", authenticate, paymentLimiter, orderPaymentRules, validate, getOrderPayment);
+router.post("/create", authenticate, paymentLimiter, createPaymentRules, validate, createPayment);
+router.post("/verify", authenticate, paymentLimiter, verifyPaymentRules, validate, verifyPaymentHandler);
+router.post("/mock/pay", authenticate, paymentLimiter, simulatePaymentRules, validate, simulatePaymentHandler);
 
 module.exports = router;
 

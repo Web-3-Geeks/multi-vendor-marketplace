@@ -32,6 +32,7 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
   const [fieldErrors, setFieldErrors] = useState({})
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const locked = Boolean(product?.takenDownByAdmin)
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -84,6 +85,12 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
     >
       <form noValidate className="space-y-4" onSubmit={handleSubmit}>
         <Alert>{formError}</Alert>
+        {locked && (
+          <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+            An admin took this product down. You can still edit its details, but it can't be published again unless an
+            admin restores it.
+          </p>
+        )}
 
         <TextField
           id="name"
@@ -160,6 +167,7 @@ function ProductFormModal({ product, categories, onClose, onSaved }) {
           onChange={handleChange}
           error={fieldErrors.status}
           options={STATUS_OPTIONS}
+          disabled={locked}
         />
 
         <div className="flex justify-end gap-2 pt-2">

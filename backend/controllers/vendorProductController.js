@@ -1,17 +1,13 @@
+const { matchedData } = require("express-validator");
 const Product = require("../models/Product");
+const escapeRegex = require("../utils/escapeRegex");
+const { pageParams, pageInfo } = require("../utils/pagination");
 const Category = require("../models/Category");
 const PRODUCT_STATUS = require("../constants/productStatus");
 const uniqueSlug = require("../utils/uniqueSlug");
+const { publishErrors } = require("../utils/productRules");
 
 const EDITABLE_FIELDS = ["name", "description", "price", "stock", "category", "images", "status"];
-
-const publishErrors = (product) => {
-  const errors = [];
-  if (!product.description || !product.description.trim()) {
-    errors.push({ field: "description", message: "Description is required to publish" });
-  }
-  return errors;
-};
 
 const createProduct = async (req, res) => {
   const data = {};
@@ -40,15 +36,35 @@ const createProduct = async (req, res) => {
   res.status(201).json({ product });
 };
 
+// `summary` counts the whole store, so the dashboard numbers don't depend on
+// which page or filter is showing.
 const listMyProducts = async (req, res) => {
+  const query = matchedData(req, { locations: ["query"] });
+  const { page, limit, skip } = pageParams(query);
+
   const filter = { vendor: req.vendor._id };
-  if (req.query.status) filter.status = req.query.status;
+  if (query.status) filter.status = query.status;
+  if (query.search) filter.name = new RegExp(escapeRegex(query.search), "i");
 
-  const products = await Product.find(filter)
-    .populate("category", "name slug")
-    .sort({ createdAt: -1 });
+  const [products, total, byStatus] = await Promise.all([
+    Product.find(filter).populate("category", "name slug").sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Product.countDocuments(filter),
+    Product.aggregate([
+      { $match: { vendor: req.vendor._id } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+  ]);
 
-  res.json({ products });
+  const count = (status) => byStatus.find((entry) => entry._id === status)?.count || 0;
+  res.json({
+    products,
+    pagination: pageInfo(page, limit, total),
+    summary: {
+      total: byStatus.reduce((sum, entry) => sum + entry.count, 0),
+      active: count(PRODUCT_STATUS.ACTIVE),
+      outOfStock: count(PRODUCT_STATUS.OUT_OF_STOCK),
+    },
+  });
 };
 
 const getMyProduct = async (req, res) => {
@@ -67,6 +83,10 @@ const updateMyProduct = async (req, res) => {
   const product = await Product.findOne({ _id: req.params.id, vendor: req.vendor._id });
   if (!product) {
     return res.status(404).json({ message: "Product not found" });
+  }
+
+  if (product.takenDownByAdmin && req.body.status !== undefined && req.body.status !== PRODUCT_STATUS.ARCHIVED) {
+    return res.status(403).json({ message: "This product was taken down by an admin and cannot be published" });
   }
 
   if (req.body.category !== undefined && !(await Category.exists({ _id: req.body.category }))) {

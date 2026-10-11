@@ -47,7 +47,10 @@ function VendorProductRow({ product, onEdit, onArchive, onStockChange, busy }) {
         />
       </td>
       <td className="whitespace-nowrap py-3 pr-3">
-        <Badge tone={PRODUCT_STATUS_TONE[product.status]}>{readableStatus(product.status)}</Badge>
+        <div className="flex flex-wrap gap-1">
+          <Badge tone={PRODUCT_STATUS_TONE[product.status]}>{readableStatus(product.status)}</Badge>
+          {product.takenDownByAdmin && <Badge tone="rose">Taken down by admin</Badge>}
+        </div>
       </td>
       <td className="whitespace-nowrap py-3 text-right">
         <button

@@ -37,6 +37,7 @@ const orderItemSchema = new mongoose.Schema(
 );
 
 orderItemSchema.index({ order: 1 });
+orderItemSchema.index({ order: 1, vendor: 1 });
 orderItemSchema.index({ vendor: 1, createdAt: -1 });
 
 module.exports = mongoose.model("OrderItem", orderItemSchema);

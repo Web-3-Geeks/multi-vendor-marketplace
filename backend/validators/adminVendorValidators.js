@@ -1,5 +1,6 @@
 const { body } = require("express-validator");
 const VENDOR_STATUS = require("../constants/vendorStatus");
+const { optionalQuery, paginationRules, searchRule } = require("./queryRules");
 
 const updateVendorStatusRules = [
   body("status")
@@ -8,4 +9,12 @@ const updateVendorStatusRules = [
     .withMessage("Status must be APPROVED, REJECTED, or SUSPENDED"),
 ];
 
-module.exports = { updateVendorStatusRules };
+const listVendorsRules = [
+  optionalQuery("status")
+    .isIn(Object.values(VENDOR_STATUS))
+    .withMessage("Invalid status filter"),
+  searchRule,
+  ...paginationRules,
+];
+
+module.exports = { updateVendorStatusRules, listVendorsRules };

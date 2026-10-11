@@ -57,7 +57,7 @@ const getPayment = async (req, res) => {
 };
 
 const refund = async (req, res) => {
-  const payment = await refundPayment(req.user._id, req.params.id, req.body.reason);
+  const payment = await refundPayment(req.user, req.params.id, req.body.reason);
   res.json({ payment: toAdminPaymentDTO(payment) });
 };
 

@@ -1,5 +1,6 @@
 const { body, query } = require("express-validator");
 const PRODUCT_STATUS = require("../constants/productStatus");
+const { paginationRules, searchRule } = require("./queryRules");
 
 const VENDOR_SETTABLE_STATUSES = [
   PRODUCT_STATUS.DRAFT,
@@ -48,6 +49,8 @@ const listProductQueryRules = [
     .optional()
     .isIn(Object.values(PRODUCT_STATUS))
     .withMessage("Invalid status filter"),
+  searchRule,
+  ...paginationRules,
 ];
 
 const PUBLIC_SORTS = ["newest", "price_asc", "price_desc"];

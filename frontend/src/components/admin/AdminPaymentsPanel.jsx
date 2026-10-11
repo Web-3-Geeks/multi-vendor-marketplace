@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CreditCard, Search } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { useAuth } from '../../hooks/useAuth'
+import { useNotice } from '../../hooks/useNotice'
 import { apiRequest } from '../../lib/api'
 import { formatDateTime, formatPrice } from '../../lib/format'
 import { ORDER_STATUS_TONE, PAYMENT_STATUS, PAYMENT_STATUS_TONE, readableStatus } from '../../constants/status'
@@ -155,6 +156,7 @@ function AdminPaymentsPanel() {
   const [page, setPage] = useState(1)
   const [detailId, setDetailId] = useState(null)
   const [refundTarget, setRefundTarget] = useState(null)
+  const [notice, showNotice] = useNotice()
 
   const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) })
   for (const [key, value] of Object.entries(filters)) {
@@ -218,6 +220,11 @@ function AdminPaymentsPanel() {
         />
       </div>
 
+      {notice && (
+        <div className="mb-3">
+          <Alert variant="success">{notice}</Alert>
+        </div>
+      )}
       {error && (
         <div className="mb-3">
           <Alert>{error.message}</Alert>
@@ -272,6 +279,7 @@ function AdminPaymentsPanel() {
           payment={refundTarget}
           onClose={() => setRefundTarget(null)}
           onRefunded={() => {
+            showNotice(`${formatPrice(refundTarget.amount)} was refunded to ${refundTarget.customer?.email}.`)
             setRefundTarget(null)
             reload()
           }}

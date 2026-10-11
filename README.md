@@ -4,6 +4,18 @@ A full-stack marketplace where customers shop, vendors sell, and admins run the 
 
 This project is built one day at a time. Each day adds to the same codebase. Snapshots of the project at the end of each day live in `week6/DayN/`.
 
+## Overview
+
+| Role | What they can do |
+|---|---|
+| **Customer** | Browse and search products, fill a cart from several stores, check out with a shipping address, pay by card, follow their orders |
+| **Vendor** | Apply for a store, manage their own products, fulfil the orders that contain their items, see their earnings after the platform's commission |
+| **Admin** | Approve or suspend stores, manage categories, moderate products, see every order and payment, issue refunds, read the permanent activity log |
+
+What makes it a marketplace rather than a shop: one cart can hold products from several vendors, and each vendor sees and fulfils **only their own items** of that order. Every price, amount and commission is calculated on the server from the database, never from what the browser sends.
+
+Contents: [Live links](#live-links) · [Tech stack](#tech-stack) · [Project structure](#project-structure) · [Screenshots](#screenshots) · [Running locally](#running-locally) · [Running the tests](#running-the-tests) · [API](#api) · [Roles and permissions](#roles-and-permissions) · [Payment workflow](#payment-workflow) · [Security checklist](#security-checklist) · [Deployment](#deployment) · [Switching to a real payment provider](#switching-to-a-real-payment-provider) · [Test accounts](#test-accounts) · [Test results](#test-results) · [Known issues](#known-issues) · [Day-by-day notes](#day-1-setup-authentication-and-rbac)
+
 ## Live links
 
 | | URL |
@@ -12,7 +24,7 @@ This project is built one day at a time. Each day adds to the same codebase. Sna
 | Backend API | https://multi-vendor-marketplace-api.vercel.app/api |
 | Health check | https://multi-vendor-marketplace-api.vercel.app/api/health |
 
-**Demo accounts:** anyone can sign up as a customer. Demo admin and vendor credentials are shared privately with the reviewer and are not stored in this repository.
+**Demo accounts:** see [Test accounts](#test-accounts). Anyone can sign up as a customer; admin and vendor credentials are shared privately with the reviewer and are not stored in this repository.
 
 **API testing:** a ready-to-import Postman collection covering every endpoint is at [`postman/MarketHub-API.postman_collection.json`](postman/MarketHub-API.postman_collection.json). Set its `baseUrl` variable, then log in once per role (Admin/Vendor logins auto-save their token).
 
@@ -20,16 +32,19 @@ This project is built one day at a time. Each day adds to the same codebase. Sna
 
 | Layer | Tools |
 |---|---|
-| Backend | Node.js, Express 5, MongoDB Atlas, Mongoose 9, JWT, bcrypt, express-validator |
+| Backend | Node.js 20, Express 5, MongoDB Atlas, Mongoose 9 (transactions), JWT, bcrypt, express-validator, helmet, express-rate-limit |
 | Frontend | React 19, Vite, React Router 7, Tailwind CSS 4, lucide-react |
-| Hosting | Vercel (backend and frontend as separate projects) |
+| Payments | Provider interface with a built-in mock provider (HMAC-signed webhooks); Stripe test mode is a documented drop-in |
+| Tests | Jest + Supertest + mongodb-memory-server (backend), Vitest + React Testing Library (frontend), Playwright (end to end), Newman (Postman collection) |
+| Hosting | Vercel (backend and frontend as separate projects), MongoDB Atlas |
 
 ## Project structure
 
 ```
 backend/
-  server.js              App setup: CORS, JSON parsing, routes, 404, error handler, DB connection
-  constants/              Roles and the vendor/product/order/payment/commission statuses -- each in one place
+  app.js                 The Express app: helmet, CORS, rate limits, body parsing + sanitising, routes, 404, error handler (no listen, so tests can import it)
+  server.js              Starts it: checks required env vars, connects to MongoDB, listens
+  constants/              Roles, the vendor/product/order/payment/commission statuses and the audit-log actions -- each in one place
   models/
     User.js               Password hashing, password comparison
     Vendor.js              One store per user, status PENDING/APPROVED/SUSPENDED/REJECTED
@@ -40,16 +55,22 @@ backend/
     Payment.js              One row per payment attempt; unique transactionId; refund details; processed webhook event ids
     Commission.js           One row per order item: gross, rate (snapshot), commission, vendor amount, status
     MockTransaction.js      The mock payment provider's own records (stands in for the provider's database)
+    AuditLog.js             Append-only activity log: updates and deletes throw
   services/
+    stateMachine.js         The one list of allowed order and payment status transitions; every status change asks it
+    auditService.js         Writes audit entries (inside the same transaction as the change) and shapes them for the API
     cartService.js          Builds the cart response (vendor-grouped, with per-item availability issues)
     orderService.js         Checkout (the transaction), status-transition rules, cancel + stock release, stale-order cleanup
     paymentService.js       Create/verify/webhook/refund; the single settlePayment transaction behind verify AND webhook
     commissionService.js    Reads COMMISSION_RATE, creates and updates commission rows
     payment/                Provider interface (createIntent, retrieve, refund, verifyWebhook) + the mock provider
   utils/slugify.js, uniqueSlug.js   URL-friendly slugs; products get a random suffix to avoid clashes
-  utils/money.js, escapeRegex.js, dateRange.js   Rounding, safe regex search, from/to date filters
-  validators/             Request validation rules, one file per resource
+  utils/money.js, escapeRegex.js, dateRange.js, pagination.js   Rounding, safe regex search, from/to date filters, page/limit handling
+  validators/             Request validation rules, one file per resource (queryRules.js holds the shared page/limit/date rules)
   middleware/
+    rateLimit.js           Login, register, checkout, payment, refund, webhook and global limiters
+    sanitize.js            Strips keys starting with $ or containing . from request bodies (NoSQL operator injection)
+    requestLogger.js       One line per request: method, path, status, time. Never the query string or body
     validate.js            Returns 400 with per-field errors if validation fails
     auth.js                authenticate (401) and requireRole (403)
     loadVendor.js           Loads the caller's store, 403s if it isn't APPROVED
@@ -57,8 +78,15 @@ backend/
   controllers/, routes/   One pair per resource: auth, vendors, admin vendor management, categories,
                           vendor's own products, the public product catalog, cart, checkout,
                           customer orders, vendor orders, payments, vendor earnings,
-                          admin payments, admin orders, admin stats
+                          admin payments, admin orders, admin stats, admin product moderation,
+                          admin audit logs
   scripts/seed.js         Creates the demo vendor (with an APPROVED store) and admin
+  scripts/setupDb.js      Creates every collection and index (npm run db:setup)
+  tests/                  Jest suites (unit/ plus one file per area) and their helpers
+
+e2e/                      Playwright browser tests, kept outside both apps (see e2e/README.md)
+postman/                  The Postman collection covering every endpoint
+week6/                    End-of-day snapshots of the whole project
 
 frontend/src/
   lib/api.js, format.js   One function for every API call; price/date/stock formatting
@@ -72,11 +100,26 @@ frontend/src/
   components/vendor/     Become-a-vendor form, product add/edit modal, product table row,
                           vendor order-management panel, vendor earnings panel
   components/admin/      Vendor application review, category CRUD, marketplace stats,
-                          orders panel, payments panel (with refund)
+                          orders panel (with activity timeline), payments panel (with refund),
+                          products moderation panel, activity log panel
+  components/ui/ConfirmDialog   "Are you sure?" step for every destructive action
+  test/                  Test setup and helpers (renderWithProviders, mockApi); *.test.js(x) files sit next to the code they test
   components/cart/, components/orders/   Cart item row; the reusable recent-orders list
   pages/                 Login, Register, three role dashboards, the public marketplace pages,
                           cart, checkout, payment, and order history/detail
 ```
+
+## Screenshots
+
+Generated by `cd e2e && npm run screenshots` against a running app (test mode, fake data).
+
+| | |
+|---|---|
+| ![Marketplace](docs/screenshots/01-marketplace.png) **Marketplace** | ![Checkout](docs/screenshots/02-checkout-address.png) **Checkout with shipping address** |
+| ![Payment pending](docs/screenshots/03-payment-pending.png) **Payment (test mode)** | ![Payment success](docs/screenshots/04-payment-success.png) **Payment confirmed by the backend** |
+| ![My orders](docs/screenshots/05-my-orders.png) **My orders** | ![Mobile checkout](docs/screenshots/06-checkout-mobile.png) **Checkout at 390px** |
+| ![Vendor dashboard](docs/screenshots/07-vendor-dashboard.png) **Vendor dashboard** | ![Admin dashboard](docs/screenshots/08-admin-dashboard.png) **Admin dashboard** |
+| ![Order timeline](docs/screenshots/09-admin-order-timeline.png) **Admin: order activity timeline** | ![Confirmation](docs/screenshots/10-confirm-dialog.png) **Confirmation before a destructive action** |
 
 ## Running locally
 
@@ -88,15 +131,19 @@ You need Node.js 20+ and a MongoDB connection string (a free MongoDB Atlas clust
 cd backend
 npm install
 cp .env.example .env    # then fill in the values
+npm run db:setup        # creates the collections and indexes (safe to repeat)
 npm run seed            # creates the demo vendor and admin
 npm run dev             # http://localhost:5000
 ```
+
+`backend/.env.example` is fully commented, and `backend/.env.production.example` lists the production values (set those in the Vercel dashboard, never in a committed file).
 
 `backend/.env`:
 
 | Variable | Purpose |
 |---|---|
 | `PORT` | Local port, defaults to 5000 |
+| `NODE_ENV` | `development` locally, `production` when deployed. In production Mongoose does not auto-build indexes (use `npm run db:setup`) |
 | `DATABASE_URL` | MongoDB connection string, including the database name |
 | `JWT_SECRET` | Long random string used to sign tokens |
 | `FRONTEND_URL` | The only origin CORS allows, e.g. `http://localhost:5173` (no trailing slash) |
@@ -108,6 +155,10 @@ npm run dev             # http://localhost:5000
 | `COMMISSION_RATE` | Platform commission as a fraction, e.g. `0.10` for 10%. Defaults to `0.10` |
 | `SEED_ADMIN_PASSWORD` | Password for `admin@test.com`, used only by `npm run seed` |
 | `SEED_VENDOR_PASSWORD` | Password for `vendor@test.com`, used only by `npm run seed` |
+| `RATE_LIMIT_DISABLED` | Optional. `true` switches every rate limiter off. Automated tests and local load runs only, never on a deployed server |
+| `TRUST_PROXY` | Optional. Any value makes Express trust one proxy hop for the client IP. Vercel is detected automatically |
+| `REQUEST_LOG` | Optional. `off` silences the one-line-per-request log |
+| `TEST_DATABASE_URL` | Optional, tests only. A database whose name ends in `_test`. Without it the tests use a throw-away in-memory MongoDB |
 
 The server refuses to start if a required variable (including the four `PAYMENT_*` ones) is missing, or if `COMMISSION_RATE` is not between 0 and 1. Generate the webhook secret with `node -e "console.log('whsec_' + require('crypto').randomBytes(32).toString('hex'))"`.
 
@@ -122,13 +173,26 @@ cp .env.example .env    # VITE_API_URL=http://localhost:5000/api
 npm run dev             # http://localhost:5173
 ```
 
-`VITE_API_URL` is built into the browser bundle, so it is public. Never put a secret in the frontend `.env`.
+`VITE_API_URL` is built into the browser bundle, so it is public. Never put a secret in the frontend `.env`. `frontend/.env.production.example` shows the production value.
+
+## Running the tests
+
+| What | Command | Needs |
+|---|---|---|
+| Backend (Jest + Supertest) | `cd backend && npm test` | Nothing: it starts its own in-memory MongoDB replica set (the first run downloads the MongoDB binary). `npm run test:unit` runs only the fast unit tests |
+| Frontend (Vitest + React Testing Library) | `cd frontend && npm test` | Nothing |
+| End to end (Playwright) | `cd e2e && npm install && npm run e2e` | Backend + frontend running, a seeded admin, `E2E_ADMIN_PASSWORD` set. See [`e2e/README.md`](e2e/README.md) |
+| Postman collection | Import `postman/MarketHub-API.postman_collection.json` | Set `baseUrl`; or run it with Newman |
+
+The backend tests never touch your real database: the test database name must end in `_test` or the suite refuses to run. The end-to-end suite creates tagged `E2E ...` data through the API, so point it at a development database.
+
+Run `npm run lint` in `frontend/` before pushing; `npm run build` produces the production bundle.
 
 ## API
 
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
-| GET | `/api/health` | Public | Returns `{ "status": "ok" }` |
+| GET | `/api/health` | Public | `{ status, database, uptime }`; 503 when the database is down |
 | POST | `/api/auth/register` | Public | Creates a customer account |
 | POST | `/api/auth/login` | Public | Returns a JWT and the user |
 | POST | `/api/auth/logout` | Public | Acknowledges logout (see "Logout" below) |
@@ -138,9 +202,9 @@ npm run dev             # http://localhost:5173
 | GET | `/api/admin/dashboard` | ADMIN | Demo protected route |
 | POST | `/api/vendors` | CUSTOMER | Submit a vendor application (status starts `PENDING`) |
 | GET | `/api/vendors/me` | Logged in | The caller's own vendor application, or `null` |
-| GET | `/api/vendors` | Public | List approved stores |
+| GET | `/api/vendors` | Public | List approved stores, `?page=&limit=` |
 | GET | `/api/vendors/:id` | Public | One approved store's public info |
-| GET | `/api/admin/vendors` | ADMIN | List vendor applications, optional `?status=` filter |
+| GET | `/api/admin/vendors` | ADMIN | List vendor applications, `?status=&search=&page=&limit=` |
 | GET | `/api/admin/vendors/:id` | ADMIN | One vendor application |
 | PATCH | `/api/admin/vendors/:id/status` | ADMIN | Set `APPROVED`, `REJECTED` or `SUSPENDED` |
 | GET | `/api/categories` | Public | List categories |
@@ -148,7 +212,7 @@ npm run dev             # http://localhost:5173
 | PATCH | `/api/categories/:id` | ADMIN | Update a category |
 | DELETE | `/api/categories/:id` | ADMIN | Delete, blocked with 409 if a product still uses it |
 | POST | `/api/vendor/products` | VENDOR, approved store | Create a product (defaults to `DRAFT`) |
-| GET | `/api/vendor/products` | VENDOR, approved store | List the caller's own products, optional `?status=` |
+| GET | `/api/vendor/products` | VENDOR, approved store | The caller's own products, `?status=&search=&page=&limit=`, plus a store-wide summary |
 | GET \| PATCH | `/api/vendor/products/:id` | VENDOR, approved store | Read or update **your own** product only |
 | DELETE | `/api/vendor/products/:id` | VENDOR, approved store | Archive (soft delete) your own product |
 | GET | `/api/products` | Public | Active products only. `?search=&category=&vendor=&minPrice=&maxPrice=&sort=&page=&limit=` |
@@ -157,10 +221,10 @@ npm run dev             # http://localhost:5173
 | POST | `/api/cart/items` | Logged in | Add a product (merges into the existing row if it's already there) |
 | PATCH | `/api/cart/items/:id` | Logged in | Change an item's quantity |
 | DELETE | `/api/cart/items/:id` | Logged in | Remove an item |
-| POST | `/api/checkout` | Logged in | Re-validates the whole cart and creates the order, atomically |
-| GET | `/api/orders` | Logged in | The caller's own orders |
+| POST | `/api/checkout` | Logged in | Body `{ shippingAddress }`. Re-validates the whole cart and creates the order, atomically |
+| GET | `/api/orders` | Logged in | The caller's own orders, `?page=&limit=` |
 | GET | `/api/orders/:id` | Logged in | One of the caller's own orders, with its items |
-| GET | `/api/vendor/orders` | VENDOR, approved store | Orders containing this vendor's products, **their items only** |
+| GET | `/api/vendor/orders` | VENDOR, approved store | Orders containing this vendor's products, **their items only**, `?page=&limit=` |
 | GET | `/api/vendor/orders/:id` | VENDOR, approved store | Same scoping, for one order |
 | PATCH | `/api/vendor/orders/:id/status` | VENDOR, approved store | Advance or cancel this vendor's segment of the order |
 | POST | `/api/payments/create` | Logged in | Start (or resume) a payment for one of **your** orders. Only the order id is sent; the amount comes from the order |
@@ -176,6 +240,11 @@ npm run dev             # http://localhost:5173
 | GET | `/api/admin/orders/:id` | ADMIN | One order with customer, items and every payment attempt |
 | PATCH | `/api/admin/orders/:id/status` | ADMIN | Move a paid order forward one step, or cancel an unpaid one |
 | GET | `/api/admin/stats` | ADMIN | Dashboard totals: orders, paid/pending/failed, sales, commission, vendor earnings |
+| GET | `/api/admin/products` | ADMIN | Every product across all stores, `?search=&status=&vendor=&category=&page=&limit=` |
+| PATCH | `/api/admin/products/:id/status` | ADMIN | `ACTIVE` or `ARCHIVED`. Archiving is a take-down the vendor cannot undo; `ACTIVE` restores it |
+| GET | `/api/admin/audit-logs` | ADMIN | The permanent activity log, `?action=&entityType=&entityId=&orderId=&actor=&source=&from=&to=&page=&limit=` |
+
+Every list endpoint is paginated: `?page=` (1 or more, default 1) and `?limit=` (1-50). Lists answer with `{ ..., pagination: { page, limit, total, totalPages } }`; an out-of-range value is a 400, never a silent default.
 
 The webhook is the one route that receives the raw, unparsed body, because its signature is computed over the exact bytes the provider sent.
 
@@ -190,7 +259,174 @@ Protected requests send `Authorization: Bearer <token>`. Cart, checkout and orde
 | 403 | Logged in, but the role (or vendor approval status) doesn't allow this |
 | 404 | Route not found, or found but not yours (vendors never get a 403 for another vendor's product -- see "Key decisions") |
 | 409 | A unique field (email, category name/slug, product slug) is already in use, or a category is still used by products |
+| 429 | Rate limit hit (too many logins, registrations, checkouts, payments or requests). Wait and retry |
 | 500 | Unexpected error. Details are logged on the server, not sent to the client |
+
+## Roles and permissions
+
+Enforced on the backend by `authenticate` (401) and `requireRole` (403); the frontend only hides what a role cannot use.
+
+| Action | Guest | Customer | Vendor | Admin |
+|---|---|---|---|---|
+| Browse products and stores | yes | yes | yes | yes |
+| Cart, checkout, pay, view own orders | no | yes | yes | yes |
+| Apply for a store | no | yes | no (already has one) | no |
+| Create / edit / archive products | no | no | **own products only**, store must be approved | no |
+| See orders and update fulfilment | no | no | **own items only**; can advance an order only once it is paid | any order |
+| See earnings and commission | no | no | **own store only** | all (stats) |
+| Approve / reject / suspend stores | no | no | no | yes |
+| Manage categories | no | no | no | yes |
+| Take down or restore any product | no | no | no (and cannot re-publish a taken-down product) | yes |
+| See all payments, issue refunds | no | no | no | yes |
+| Cancel or advance any order | no | no | no | yes |
+| Read the activity log | no | no | no | yes |
+
+Deliberate details: a vendor who asks for another vendor's product or order gets **404, not 403**, so ids cannot be probed. A vendor sees an order's shipping address only after it is paid. A customer cannot pay, view or cancel someone else's order (404).
+
+## Payment workflow
+
+```
+Cart -> Checkout (address) -> Order PENDING / payment PENDING        stock is reserved here
+                                      |
+                       POST /payments/create   (amount comes from the order, never the browser)
+                                      |
+                    customer pays on the provider's page
+                                      |
+            +-------------------------+--------------------------+
+            | webhook (signed, provider -> server)               | POST /payments/verify (browser -> server)
+            +-------------------------+--------------------------+
+                                      |    either door runs the same single transaction: settlePayment
+                          +-----------+------------+
+                       paid                      failed
+                          |                         |
+       payment PAID, order CONFIRMED,        payment FAILED, order stays PENDING
+       commissions created, audit logged     (customer can retry: a new payment)
+                          |
+   vendor: PROCESSING -> SHIPPED -> DELIVERED      admin refund: payment REFUNDED, items cancelled,
+   (commission becomes PAID on delivery)           stock returned, commissions REFUNDED
+```
+
+Allowed status changes live in one file, `backend/services/stateMachine.js`, and the same table is used as the filter of the atomic database update, so an illegal or racing change simply matches nothing:
+
+| Order | Can move to |
+|---|---|
+| PENDING | CONFIRMED, CANCELLED |
+| CONFIRMED | PROCESSING, CANCELLED |
+| PROCESSING | SHIPPED, CANCELLED |
+| SHIPPED | DELIVERED, CANCELLED |
+| DELIVERED, CANCELLED | final |
+
+| Payment attempt | Can move to |
+|---|---|
+| PENDING | PROCESSING, PAID, FAILED, CANCELLED |
+| PROCESSING | PAID, FAILED, CANCELLED |
+| PAID | REFUNDED |
+| FAILED, CANCELLED, REFUNDED | final (a retry is a new payment) |
+
+Guarantees (each is covered by an automated test):
+
+- **No double payment.** A partial unique index allows one open payment per order; calling create twice returns the same payment.
+- **Idempotent webhooks.** Each event id is stored; a replay changes nothing. Verify and webhook racing for the same payment: exactly one wins.
+- **No duplicate commission.** `Commission.orderItem` is unique, and commissions are only created inside the settle transaction.
+- **The browser is never believed.** Success is shown only after the backend confirms; `?status=success` in the URL does nothing; the amount is read from the order.
+- **Everything is audited.** Every payment event, order status change, refund and admin action writes an append-only audit entry, inside the same transaction as the change it describes.
+
+## Security checklist
+
+| Area | What is in place | Where |
+|---|---|---|
+| Passwords | bcrypt hashes; never returned by any endpoint | `models/User.js` |
+| Auth | JWT (1 day) in the `Authorization` header; the user is reloaded from the database on every request, so a deleted user is locked out at once | `middleware/auth.js` |
+| RBAC | Role checks on every protected route; ownership checks in the query itself (`{ _id, vendor }`), so another vendor's data is a 404 | `middleware/`, controllers |
+| Rate limiting | Failed logins: 10 per 15 min per account+IP and 50 per 15 min per IP (successful logins do not count); register 20/h; checkout 20/min; payments 30/min; refunds 10/min; webhook 300/min; everything 300/min per IP. Answers 429 | `middleware/rateLimit.js` |
+| Security headers | helmet (CSP-style defaults, `nosniff`, frame protection, HSTS on HTTPS); `x-powered-by` removed | `app.js` |
+| CORS | Only `FRONTEND_URL` is allowed | `app.js` |
+| Input validation | express-validator on every body, query and id; unknown fields are dropped (address and product fields are whitelisted); bad ids are 400, never 500 | `validators/` |
+| NoSQL injection | Request bodies are stripped of keys starting with `$` or containing `.`; search text is regex-escaped | `middleware/sanitize.js`, `utils/escapeRegex.js` |
+| Body size | 100 kb limit on JSON and on the webhook | `app.js` |
+| Payments | Amount from the database; HMAC-SHA256 over the raw body; `timingSafeEqual`; idempotent events; no card data ever stored or logged | `services/payment*` |
+| Secrets | Only in environment variables; `.env` is git-ignored; a test scans every response for secret values; the server refuses to start if one is missing | `server.js` |
+| Error handling | One handler: validation and known errors keep their message, everything else is a generic 500 with details only in the server log | `middleware/errorHandler.js` |
+| Logging | One line per request (method, path, status, ms), never query strings or bodies | `middleware/requestLogger.js` |
+| Data integrity | Transactions for checkout, settle, refund and cancel; unique indexes (email, one open payment per order, one commission per item); `autoIndex` off in production | models, `scripts/setupDb.js` |
+| Audit | Append-only log: model hooks refuse updates and deletes | `models/AuditLog.js` |
+
+Limits to be aware of: see [Known issues](#known-issues) (the in-memory rate limiter on serverless, no email verification, no refresh tokens).
+
+## Deployment
+
+Two Vercel projects (backend and frontend) and one MongoDB Atlas cluster.
+
+**Backend project** (root directory `backend`, Express preset, entry `server.js`)
+1. Set the environment variables from `backend/.env.production.example` (Settings, Environment Variables, Production). `FRONTEND_URL` must be the exact frontend URL, `https`, no trailing slash.
+2. Settings, Functions, **Function Region: Mumbai (bom1)** (or whichever region matches your Atlas cluster). A function far from the database pays the round-trip on every query: moving it next to the cluster cut a checkout from 3.2 s to 0.3 s.
+3. After the first deploy, build the indexes once from your machine with `DATABASE_URL` pointing at the production database: `cd backend && npm run db:setup`. Repeat after any release that adds an index. Then `npm run seed` once for the demo admin/vendor (with strong passwords).
+4. Check `https://<backend>/api/health` returns `{"status":"ok","database":"connected",...}`.
+
+**Frontend project** (root directory `frontend`, Vite preset)
+1. Set `VITE_API_URL=https://<backend>/api` for Production, then redeploy. Vite reads it at build time.
+2. `frontend/vercel.json` rewrites every path to `index.html` so deep links (`/orders/123`) work.
+
+**Webhook.** The URL a real provider must call is `https://<backend>/api/payments/webhook`. With the mock provider the app calls it itself.
+
+**Atlas.** Network access must allow Vercel (`0.0.0.0/0` on the free tier, protected by the database user's password). Use a separate database for production and for development.
+
+**Before every release:** `cd backend && npm test`, `cd frontend && npm run lint && npm test && npm run build`, push, then run the end-to-end suite and Postman collection against the live URLs.
+
+## Switching to a real payment provider
+
+The app talks to payments only through `backend/services/payment/index.js`, which returns an object with `createIntent`, `retrieve`, `refund` and `verifyWebhook`. The mock provider is one implementation. To use **Stripe in test mode** (no real money; test card `4242 4242 4242 4242`):
+
+1. `npm install stripe` in `backend/` and create a test-mode account at stripe.com (no business details needed for test mode).
+2. Add `backend/services/payment/stripeProvider.js` implementing the same four functions:
+   - `createIntent({ amount, currency, orderId })`: create a PaymentIntent with `amount` in the smallest unit (`Math.round(amount * 100)`), `metadata: { orderId }`; return `{ transactionId: intent.id, clientSecret, amount, currency, status, expiresAt }`.
+   - `retrieve(transactionId)`: `paymentIntents.retrieve`, mapped back to `{ transactionId, orderId, amount (in dollars), currency, status }` where Stripe's `succeeded` is our `succeeded`.
+   - `refund(transactionId)`: `refunds.create({ payment_intent })`, return `{ refundId }`.
+   - `verifyWebhook(rawBody, signature)`: `stripe.webhooks.constructEvent(rawBody, signature, PAYMENT_WEBHOOK_SECRET)`, then map `payment_intent.succeeded` / `payment_intent.payment_failed` to `{ id, type: "payment.succeeded" | "payment.failed", data: { transactionId, orderId, amount, currency } }`, the shape `handleWebhookEvent` already expects.
+3. Register it: in `services/payment/index.js` add `stripe: require("./stripeProvider")` to `providers`.
+4. Stripe signs webhooks in the `Stripe-Signature` header, while the controller reads `x-payment-signature`: change `paymentController.js` to read `req.headers["stripe-signature"] || req.headers["x-payment-signature"]`.
+5. The frontend needs a card form instead of the "Test mode" panel: load Stripe.js with the public key, confirm the PaymentIntent with the `clientSecret`, then call `POST /payments/verify` exactly as today. Hosted Stripe Checkout is an alternative that needs no card form.
+6. Environment: `PAYMENT_PROVIDER=stripe`, `PAYMENT_PUBLIC_KEY=pk_test_...`, `PAYMENT_SECRET_KEY=sk_test_...`. In the Stripe dashboard add a webhook endpoint `https://<backend>/api/payments/webhook` for `payment_intent.succeeded` and `payment_intent.payment_failed` (or run `stripe listen --forward-to localhost:5000/api/payments/webhook`) and copy its signing secret into `PAYMENT_WEBHOOK_SECRET`.
+7. With a real provider the `/api/payments/mock/pay` route answers 404 automatically (it only exists when `PAYMENT_PROVIDER=mock`), which also removes the "any user can mark their own payment paid" shortcut.
+8. Go live by swapping the test keys for live keys in the production environment only. Stripe test and live data are completely separate.
+
+The rest (settle transaction, idempotency, commissions, refunds, audit log, state machine) does not change.
+
+## Test accounts
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@test.com` | Value of `SEED_ADMIN_PASSWORD` in `backend/.env` (created by `npm run seed`) |
+| Vendor | `vendor@test.com` | Value of `SEED_VENDOR_PASSWORD` in `backend/.env` |
+| Customer | anything you register | Register at `/register` (8+ characters) |
+
+Passwords are never stored in this repository. Test payments use the mock provider: on the payment page choose **Pay** for success or **Simulate a declined payment** for a failure; no card details are asked for.
+
+## Test results
+
+Last full run (all on the Day 5 code):
+
+| Suite | Result |
+|---|---|
+| Backend: Jest + Supertest, 15 suites | **554 passed**, 0 failed (about 90 s) |
+| Frontend: Vitest + React Testing Library, 7 files | **74 passed**, 0 failed (about 8 s) |
+| End to end: Playwright in Microsoft Edge (desktop, 768px, 375px) | **57 checks passed**, no console errors |
+| Postman collection via Newman | **all requests and assertions passed** against the real backend |
+| `npm run lint` (frontend), `npm run build` | clean |
+
+Beyond the happy paths, the backend suites cover: every role against every protected route, vendor isolation, malformed and unknown ids (400/404, never 500), pagination limits on every list, 6 parallel payment creates, verify racing the webhook, duplicate and tampered webhooks, refund twice, commission amounts to the cent, rate limits, injection payloads, a scan that no response leaks a secret or a stack trace, the append-only audit log, and full customer -> payment -> vendor -> admin refund workflows.
+
+## Known issues
+
+- **The rate limiter keeps its counters in memory.** On Vercel serverless every warm instance counts separately, so the limits slow abuse down but are not a hard quota. A shared store (Redis / Upstash) is the production fix.
+- **The mock provider is for development.** With `PAYMENT_PROVIDER=mock` any logged-in user can mark their own payment as paid. Switch provider before taking real money ([steps above](#switching-to-a-real-payment-provider)).
+- **Unpaid orders are cleaned up lazily** (when someone checks out or an admin opens the order list), because serverless has no background worker. A scheduled job (Vercel Cron) would be the production approach.
+- **Refunds are full only**, and a provider refund that succeeds followed by a database failure is logged for manual reconciliation, not retried.
+- **No email verification, password reset or refresh tokens.** Tokens last one day; logging out only clears the browser's copy.
+- **Webhook signatures carry no timestamp**, so there is no replay window (idempotency makes a replay harmless).
+- **A vendor can cancel an item of an already-paid order.** That voids their commission, but the money stays with the platform until an admin refunds the payment.
+- Orders created before Day 4 (Cash on Delivery) show as "Unpaid" and cannot be progressed.
+- The first run of the backend tests downloads a MongoDB binary (about 100 MB) once.
 
 ---
 
@@ -441,4 +677,71 @@ If a payment arrives for an order that was already cancelled, the payment is sti
 - A vendor can cancel an item of an already paid order. That voids their commission, but the money stays with the platform until an admin refunds the payment.
 - The cleanup of unpaid orders only runs when someone triggers it. In production this would be a scheduled job (for example a Vercel Cron Job).
 - Orders from before Day 4 (Cash on Delivery) show as "Unpaid", and because vendors can no longer advance unpaid orders, they cannot be progressed.
-- No rate limiting on login or payment endpoints.
+- No rate limiting on login or payment endpoints (added in Day 5).
+
+
+---
+
+## Day 5: Integration, testing, security and deployment readiness
+
+### What was built
+
+**Shipping address (added on top of the Day 5 spec).** Checkout now asks for a name, phone, address, city, postal code and country, validated on both sides, saved on the order as a snapshot and shown on the payment page, the order pages and, for paid orders, to the vendors who must ship it.
+
+**Order and payment lifecycle**
+- `services/stateMachine.js`: the single table of allowed order and payment transitions. It is also used as the filter of the atomic database update, so an illegal or racing change simply matches nothing.
+- An append-only **audit log** (`AuditLog`): payment created / paid / failed / cancelled / refunded, order status changes, automatic cancellations, and every admin action on vendors, products and categories. Each entry has the actor, their role (or the payment provider / the system), the old and new values and the time. It is written inside the same transaction as the change. `GET /api/admin/audit-logs`, an activity timeline inside the admin order details and an Activity log panel with filters.
+- **Product moderation**: `GET /api/admin/products` and `PATCH /api/admin/products/:id/status`. A product taken down by an admin leaves the marketplace and the vendor cannot re-publish it (403) until an admin restores it; the vendor sees a "Taken down by admin" badge and a locked status field.
+
+**Security and integrity**
+- helmet, rate limits (login per account and per IP, register, checkout, payments, refunds, webhook, global), a body sanitiser against `$`/dotted keys, a 100 kb body limit, trust-proxy on Vercel, request logging without query strings or bodies, and a `/api/health` that reports the database state.
+- Index review (products, vendors, commissions, order items, audit log). `autoIndex` is off in production; `npm run db:setup` creates everything.
+- `app.js` / `server.js` split so the whole API can be tested in-process.
+
+**Performance and UX**
+- Pagination on every list that can grow (customer orders, vendor orders and products, admin vendors, public stores) with `?page=&limit=` validated everywhere; the customer order list went from 2 queries per order to 3 per page.
+- The Vercel function region moved to Mumbai next to the Atlas cluster: a checkout went from 3.2 s to 0.3 s.
+- A shared `ConfirmDialog` before archiving a product, deleting a category, rejecting or suspending a store, cancelling an order or its items, taking a product down and refunding. Success messages on every admin/vendor action, empty states, dimmed stale data while paging, and modals rendered through a portal (they were clipped inside blurred panels).
+- Checked at desktop, 768px and 375px: no horizontal scroll on any page.
+
+**Tests and docs.** Backend, frontend and end-to-end suites, the Postman collection (audit logs, admin products, pagination params), complete dev and production `.env` examples, and this README.
+
+### Key decisions and why
+
+**One state machine, used as a database filter.**
+Rather than reading a document, checking it in JavaScript and saving it back (which two requests can race through), the allowed "from" states are put into the update's query. A second request finds nothing to update and gets a clean 409. This is what makes verify-versus-webhook and double refunds safe without locks.
+
+**The audit log cannot be edited, even by us.**
+The model's update and delete hooks throw, and the API has no write endpoint. Entries are written inside the transaction that makes the change, so there is never a change without a record or a record without a change. Webhook-caused entries are attributed to "Payment provider", cleanup to "System", never to a made-up user.
+
+**A takedown is stronger than an archive.**
+A vendor can archive and re-publish their own product freely. An admin's takedown sets a lock the vendor's endpoints respect, otherwise moderation would be undone with one click.
+
+**Rate limits count failures, not successes.**
+Logins are limited per account-and-IP (10 failures per 15 minutes) and more loosely per IP, and a successful login does not count. An attacker is slowed down, while a real user is never locked out by their own good behaviour. The counters are in memory, which is honest for a single server and a brake rather than a quota on serverless (see Known issues).
+
+**Tests use a real database, not mocks.**
+The backend suite runs against an in-memory MongoDB replica set, because the interesting behaviour (transactions, unique indexes, atomic updates, races) lives in the database. It is isolated by a name check: the database name must end in `_test`.
+
+**End-to-end data is created through the API.**
+The Playwright suite needs no database access, so it works the same against a local server or a deployed one. The price is that it leaves tagged test records behind, so it should target a development database.
+
+**Pagination is validated, not defaulted.**
+`?page=0`, `?limit=500` or `?page=abc` are 400s with a message, on every list. Silently clamping would hide client bugs.
+
+### Testing done
+
+- **Backend (Jest + Supertest): 554 tests in 15 suites, all passing.** Unit tests for the state machine and utilities, then auth, RBAC across every route and role, vendors, products, cart and checkout, orders, payments (races, replays, tampered webhooks), commissions to the cent, admin endpoints, the audit log, validation of every id and paging parameter, security (rate limits, injection payloads, header checks, no leaked secrets or stack traces) and end-to-end workflows.
+- **Frontend (Vitest + React Testing Library): 74 tests in 7 files, all passing.** Address validation, audit wording, the API client, formatting, `ConfirmDialog`, `Modal`, `QuantityStepper`, `Pagination`, route guards for every role, and the login and register pages.
+- **End to end (Playwright, Microsoft Edge): 57 checks, all passing**, in `e2e/`: the customer journey including a declined payment, retry and success; forged success URL; another customer's order; admin cancel; vendor and admin confirmation prompts; product take-down and restore; the activity timeline; route guards; tablet and phone layouts; no console errors.
+- **Postman:** the collection was run with Newman against the real backend; the new Admin Products and Audit Logs folders pass.
+- Frontend `npm run lint` and `npm run build` are clean.
+- Bugs found by this work and fixed: a vendor could re-publish a product an admin had taken down; modals were clipped inside blurred panels; a checkout that took 3 seconds because the function ran in a different region from the database; the customer order list ran two queries per order.
+
+### Known limitations
+
+- The rate limiter's counters are in memory, so on Vercel each warm instance counts on its own. A shared store (for example Upstash Redis) is the production fix.
+- Test data from the end-to-end suite is not deleted afterwards.
+- The Stripe provider is documented step by step but not implemented; the app runs on the mock provider.
+- Screenshots are included, but there is no demo video.
+- Everything under "Known issues" near the top of this file still applies.
