@@ -21,7 +21,12 @@ if (missing.length) {
 
 // Loaded after dotenv: the app reads FRONTEND_URL and friends when it is built.
 const { getCommissionRate } = require("./services/commissionService");
-const app = require("./expressApp");
+// Vercel only accepts an entry file that imports express itself, so this thin outer app
+// mounts the real one from expressApp.js.
+const express = require("express");
+const api = require("./expressApp");
+const app = express();
+app.use(api);
 
 try {
   getCommissionRate();
@@ -49,11 +54,11 @@ const connect = async () => {
       autoIndex: process.env.NODE_ENV !== "production",
       serverSelectionTimeoutMS: 10000,
     });
-    app.locals.dbError = null;
+    api.locals.dbError = null;
     console.log("MongoDB connected");
   } catch (err) {
-    app.locals.dbError = describeError(err);
-    console.error("MongoDB connection failed:", app.locals.dbError);
+    api.locals.dbError = describeError(err);
+    console.error("MongoDB connection failed:", api.locals.dbError);
     setTimeout(connect, RETRY_MS);
   }
 };

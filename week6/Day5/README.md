@@ -43,7 +43,7 @@ Contents: [Live links](#live-links) · [Tech stack](#tech-stack) · [Project str
 ```
 backend/
   expressApp.js          The Express app: helmet, CORS, rate limits, body parsing + sanitising, routes, 404, error handler (no listen, so tests can import it). Deliberately not named app.js: Vercel would pick that as the entry file and skip server.js, which is what connects to MongoDB
-  server.js              Starts it: checks required env vars, connects to MongoDB, listens
+  server.js              Starts it: checks required env vars, connects to MongoDB (retrying), listens. It imports express itself and mounts expressApp.js, because Vercel only accepts an entry file that imports express
   constants/              Roles, the vendor/product/order/payment/commission statuses and the audit-log actions -- each in one place
   models/
     User.js               Password hashing, password comparison
