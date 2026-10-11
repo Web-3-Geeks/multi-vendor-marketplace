@@ -400,6 +400,17 @@ The rest (settle transaction, idempotency, commissions, refunds, audit log, stat
 | Vendor | `vendor@test.com` | Value of `SEED_VENDOR_PASSWORD` in `backend/.env` |
 | Customer | anything you register | Register at `/register` (8+ characters) |
 
+### Demo data
+
+`npm run seed:demo` (in `backend/`) fills an empty marketplace through the real API: 5 vendors with approved stores (Bennett Electronics, Carter & Co. Fashion, Hughes Home & Living, Turner Beauty Studio, Walker Sports & Style), 5 categories, 25 products with matching photos, 6 customers and 14 orders at every stage (unpaid, a declined payment retried, confirmed, processing, shipped, delivered, refunded). Because it uses the API, stock, commissions and the audit log are all genuine. It is safe to run twice: anything that exists is skipped.
+
+```bash
+# a server with RATE_LIMIT_DISABLED=true and PAYMENT_PROVIDER=mock, pointed at the database to fill
+API_URL=http://localhost:5000/api ADMIN_PASSWORD=<SEED_ADMIN_PASSWORD> DEMO_PASSWORD=<a password for the demo accounts> npm run seed:demo
+```
+
+All demo accounts share one password (the `DEMO_PASSWORD` you pass). Vendors: `oliver.bennett@example.com`, `emily.carter@example.com`, `daniel.hughes@example.com`, `sophie.turner@example.com`, `james.walker@example.com`. Customers: `amelia.clarke@`, `harry.wilson@`, `charlotte.evans@`, `jack.thompson@`, `grace.robinson@`, `noah.davies@example.com`. Product data and photos come from [DummyJSON](https://dummyjson.com) (a snapshot is kept in `backend/scripts/demo/demoData.json`).
+
 Passwords are never stored in this repository. Test payments use the mock provider: on the payment page choose **Pay** for success or **Simulate a declined payment** for a failure; no card details are asked for.
 
 ## Test results
