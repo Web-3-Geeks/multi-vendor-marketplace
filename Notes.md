@@ -251,3 +251,40 @@ Stack: Node/Express + MongoDB (backend) - React + Tailwind (frontend)
 - [x] Postman collection: audit logs, admin products, pagination params
 - [x] Production build passes; week6/Day5 snapshot + index row
 - [x] Final live test on the deployed URLs (e2e 57/57, Newman 34 requests / 23 assertions, headers, validation, injection, CORS, 413)
+
+---
+
+# Week 8 - Capstone: Production hardening and deployment (due Fri 23 Oct 2026)
+
+Chosen project: the Marketplace (Weeks 1-6 codebase). Hosting: backend on Render (Docker), frontend on Vercel, database on MongoDB Atlas.
+Demo goal (Friday): push a small code change -> GitHub Actions runs the tests -> deploys automatically -> the live app shows the change.
+
+## Mon - Kickoff
+- [x] Chose the project (Marketplace) and the hosting split (Render backend + Vercel frontend)
+- [x] Plan written here
+
+## Tue - Tests + Docker
+- [x] Automated tests already in the repo (backend Jest 554, frontend Vitest 74, Playwright e2e 57)
+- [ ] backend/Dockerfile (multi-stage, production deps only, non-root, healthcheck) + .dockerignore
+- [ ] frontend/Dockerfile (build with VITE_API_URL, serve with nginx, SPA fallback) + nginx.conf + .dockerignore
+- [ ] docker-compose.yml: mongo (replica set, needed for transactions) + api + web, one command to run
+- [ ] Docker install on the dev laptop + `docker compose up` verified; README "Run with Docker"
+
+## Wed - Mentor clinic (questions to ask)
+- [ ] Secrets management in Actions (repo secrets vs environment secrets), deploy hooks vs CLI
+- [ ] Should deploys be blocked unless CI is green (branch protection)?
+
+## Thu - CI/CD + deploy + monitoring
+- [ ] .github/workflows/ci.yml: lint -> backend tests -> frontend tests -> build -> docker build check, on every push and PR
+- [ ] Deploy job on push to main (only after tests pass): Render deploy hook + Vercel deploy hook, then wait for /api/health
+- [ ] Render service from backend/Dockerfile with production env vars; FRONTEND_URL and VITE_API_URL updated; Atlas allows the Render IPs
+- [ ] Turn off the platforms' own git auto-deploy so only CI deploys
+- [ ] Monitoring: UptimeRobot on /api/health (also keeps the free Render service awake), structured request logs, how to read logs
+- [ ] Branch protection: main requires the CI check
+- [ ] Final full-codebase PR review (/code-review), fix findings
+
+## Fri - Demo
+- [ ] Rehearse: small visible change -> push -> CI green -> auto-deploy -> live app updated
+- [ ] README: CI badge, Docker steps, architecture + deployment diagram, monitoring
+- [ ] Final live regression (e2e + Newman) on the production URLs
+- [ ] week8 snapshot + index row
