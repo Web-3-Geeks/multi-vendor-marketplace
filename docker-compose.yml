@@ -1,0 +1,70 @@
+# Whole marketplace on one machine:  docker compose up --build
+#   web  -> http://localhost:8080
+#   api  -> http://localhost:5000/api   (health: /api/health)
+#   mongo stays inside the Docker network; its data lives in the "mongo-data" volume.
+#
+# The values below are for LOCAL use only. Any of them can be overridden from the shell
+# or a root .env file (e.g. JWT_SECRET=... docker compose up). Production secrets live in
+# the Render / Vercel dashboards and GitHub secrets, never in this file.
+
+services:
+  mongo:
+    image: mongo:7
+    # Checkout and payments use transactions, which need a replica set (Atlas is one).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-data:/data/db
+    # Doubles as the one-time replica set setup: the first check initiates rs0,
+    # later checks just confirm it is up.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok }",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      DATABASE_URL: mongodb://mongo:27017/marketplace?replicaSet=rs0
+      JWT_SECRET: ${JWT_SECRET:-local-docker-only-jwt-secret-change-me}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      BACKEND_URL: http://localhost:5000
+      PAYMENT_PROVIDER: mock
+      PAYMENT_PUBLIC_KEY: pk_test_mock_123
+      PAYMENT_SECRET_KEY: sk_test_mock_123
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-whsec_local_docker_only}
+      COMMISSION_RATE: "0.10"
+    # autoIndex is off in production, so create the indexes first (safe to repeat).
+    command: ["sh", "-c", "node scripts/setupDb.js && node server.js"]
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the JS bundle at build time; the browser calls the API directly.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
