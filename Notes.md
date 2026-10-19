@@ -265,10 +265,12 @@ Demo goal (Friday): push a small code change -> GitHub Actions runs the tests ->
 
 ## Tue - Tests + Docker
 - [x] Automated tests already in the repo (backend Jest 554, frontend Vitest 74, Playwright e2e 57)
-- [ ] backend/Dockerfile (multi-stage, production deps only, non-root, healthcheck) + .dockerignore
-- [ ] frontend/Dockerfile (build with VITE_API_URL, serve with nginx, SPA fallback) + nginx.conf + .dockerignore
-- [ ] docker-compose.yml: mongo (replica set, needed for transactions) + api + web, one command to run
-- [ ] Docker install on the dev laptop + `docker compose up` verified; README "Run with Docker"
+- [x] New backend/tests/health.test.js: /api/health with the DB down (503 degraded + reason) and back up (200) -> 557 passing
+- [x] backend/Dockerfile (production deps only, non-root, healthcheck) + .dockerignore
+- [x] frontend/Dockerfile (build with VITE_API_URL, serve with nginx, SPA fallback) + nginx.conf + .dockerignore
+- [x] docker-compose.yml: mongo (replica set, needed for transactions) + api + web, one command to run
+- [x] Docker install on the dev laptop + `docker compose up` verified (seeded, browser order + payment); README "Running with Docker" + Week 8 section
+- [ ] Found for Thursday: request log prints the router-relative path (`POST /items`) instead of the full URL (`/api/cart/items`)
 
 ## Wed - Mentor clinic (questions to ask)
 - [ ] Secrets management in Actions (repo secrets vs environment secrets), deploy hooks vs CLI

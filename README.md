@@ -175,6 +175,34 @@ npm run dev             # http://localhost:5173
 
 `VITE_API_URL` is built into the browser bundle, so it is public. Never put a secret in the frontend `.env`. `frontend/.env.production.example` shows the production value.
 
+## Running with Docker
+
+The whole marketplace (MongoDB + API + web) with one command. You only need [Docker Desktop](https://www.docker.com/products/docker-desktop/); no Node, no Atlas, no `.env` files.
+
+```bash
+docker compose up -d --build     # first build takes a few minutes
+docker compose ps                # all three should become "healthy"
+```
+
+| Service | URL | Image |
+|---|---|---|
+| `web` | http://localhost:8080 | `frontend/Dockerfile`: Vite build, served by nginx (SPA fallback in `frontend/nginx.conf`) |
+| `api` | http://localhost:5000/api (health: `/api/health`) | `backend/Dockerfile`: Node 20 alpine, production deps only, runs as the non-root `node` user |
+| `mongo` | internal only | `mongo:7` as a single-node replica set (checkout and payments need transactions) |
+
+The API creates its indexes (`scripts/setupDb.js`) before it starts, and MongoDB data lives in the `mongo-data` volume, so it survives `docker compose down`. Use `docker compose down -v` to start from an empty database.
+
+Fill it with test accounts and demo data (choose your own passwords; they only exist in this local database):
+
+```bash
+docker compose exec -e SEED_ADMIN_PASSWORD=<admin pw> -e SEED_VENDOR_PASSWORD=<vendor pw> api node scripts/seed.js
+docker compose exec -e API_URL=http://localhost:5000/api -e ADMIN_PASSWORD=<admin pw> -e DEMO_PASSWORD=<demo pw> api node scripts/demo/seedDemo.js
+```
+
+Open the app at **http://localhost:8080**, not `127.0.0.1:8080`: CORS allows exactly the `FRONTEND_URL` origin, so another spelling of the same address is blocked by the browser.
+
+The secrets in `docker-compose.yml` are local placeholders. Override any of them from the shell or a root `.env` (for example `JWT_SECRET=...`). Production values live in the hosting dashboards, never in the repository. `docker compose logs -f api` follows the API's request log.
+
 ## Running the tests
 
 | What | Command | Needs |
@@ -415,11 +443,11 @@ Passwords are never stored in this repository. Test payments use the mock provid
 
 ## Test results
 
-Last full run (all on the Day 5 code):
+Last full run (Day 5 code; the backend suite re-run in Week 8 after the health tests were added):
 
 | Suite | Result |
 |---|---|
-| Backend: Jest + Supertest, 15 suites | **554 passed**, 0 failed (about 90 s) |
+| Backend: Jest + Supertest, 16 suites | **557 passed**, 0 failed (about 2 min) |
 | Frontend: Vitest + React Testing Library, 7 files | **74 passed**, 0 failed (about 8 s) |
 | End to end: Playwright in Microsoft Edge (desktop, 768px, 375px) | **57 checks passed**, no console errors |
 | Postman collection via Newman | **all requests and assertions passed** against the real backend |
@@ -756,3 +784,33 @@ The Playwright suite needs no database access, so it works the same against a lo
 - The Stripe provider is documented step by step but not implemented; the app runs on the mock provider.
 - Screenshots are included, but there is no demo video.
 - Everything under "Known issues" near the top of this file still applies.
+
+---
+
+## Week 8: Production hardening and deployment (capstone)
+
+### Tuesday: tests and Docker
+
+#### What was built
+
+- `backend/Dockerfile` + `.dockerignore`: the API image (Node 20 alpine, `npm ci --omit=dev`, non-root user, healthcheck on `/api/health`). `.env` files and tests never enter the image.
+- `frontend/Dockerfile` + `nginx.conf` + `.dockerignore`: a two-stage build. Node builds the bundle, then only `dist/` is copied into nginx (21 MB image). `nginx.conf` serves `index.html` for unknown paths so deep links and refreshes work, and caches the hashed `/assets` files for a year.
+- `docker-compose.yml`: `mongo` (replica set), `api` and `web`, started in order through healthchecks. See [Running with Docker](#running-with-docker).
+- `backend/tests/health.test.js`: three tests for `/api/health` with the database down (503 `degraded` with the failure reason) and after it comes back (200 again, old reason hidden). Only the healthy case was tested before, and the down case is exactly what monitoring depends on.
+
+#### Key decisions and why
+
+**MongoDB runs as a replica set, even locally.** Checkout and payments use transactions, and MongoDB only allows transactions on a replica set. The compose healthcheck initiates `rs0` on its first run, so no manual setup step is needed.
+
+**`VITE_API_URL` is a build argument, not a run-time variable.** Vite writes it into the JavaScript at build time, so changing it means rebuilding the `web` image. That also makes it public, so it must never hold a secret.
+
+**Indexes are created on container start.** `NODE_ENV=production` turns Mongoose's auto-indexing off, so the API container runs the idempotent `setupDb.js` before `server.js`.
+
+**Healthchecks use `127.0.0.1`, not `localhost`.** Inside alpine, `localhost` resolves to IPv6 `::1` first while nginx listens on IPv4 only, which marked a working `web` container unhealthy.
+
+#### Testing done
+
+- Backend suite: 557 passed in 16 suites. The new health tests were checked against a deliberately broken route (always 200) and failed as they should.
+- `docker compose up --build` from scratch: all three containers healthy, `/api/health` reports the database connected.
+- Seeded through the containers (`seed.js` + `seedDemo.js`: 25 products, 14 orders through real checkout, so transactions work in Docker).
+- Manual browser run on http://localhost:8080: customer login, add to cart, checkout, mock payment, verify, plus vendor and admin dashboards and refreshing deep links.
