@@ -50,6 +50,9 @@ app.get("/api/health", (req, res) => {
     // Why the last connection attempt failed (credentials and host names removed).
     ...(!databaseUp && app.locals.dbError ? { reason: app.locals.dbError } : {}),
     uptime: Math.round(process.uptime()),
+    // The deployed commit (Render sets RENDER_GIT_COMMIT), so CI and a demo can see
+    // which version is live. "dev" when running locally.
+    version: (process.env.RENDER_GIT_COMMIT || "dev").slice(0, 7),
   });
 });
 

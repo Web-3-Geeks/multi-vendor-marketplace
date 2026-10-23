@@ -40,3 +40,18 @@ describe("health check after the database comes back", () => {
     expect(res.body).not.toHaveProperty("reason");
   });
 });
+
+describe("health check version", () => {
+  afterEach(() => delete process.env.RENDER_GIT_COMMIT);
+
+  test("shows the short commit the host deployed", async () => {
+    process.env.RENDER_GIT_COMMIT = "5cdf61138cfcefa6faf0b24897092630c3d86bdc";
+    const res = await f.api().get("/api/health");
+    expect(res.body.version).toBe("5cdf611");
+  });
+
+  test('is "dev" when no host commit is set', async () => {
+    const res = await f.api().get("/api/health");
+    expect(res.body.version).toBe("dev");
+  });
+});
