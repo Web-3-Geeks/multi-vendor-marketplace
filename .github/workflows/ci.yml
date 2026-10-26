@@ -1,5 +1,5 @@
-# Runs on every push and pull request. A change only counts as good when all three
-# jobs are green; the deploy job (added after Render is set up) will depend on them.
+# Runs on every push and pull request. A change only counts as good when the three
+# check jobs are green, and only then does a push to main reach the deploy job.
 name: CI
 
 on:
@@ -8,10 +8,16 @@ on:
   pull_request:
   workflow_dispatch:
 
-# A newer push to the same branch cancels the run that is still going.
+# The jobs only read the code; the deploy job talks to Render/Vercel through its own
+# secrets, so the built-in GITHUB_TOKEN never needs write access.
+permissions:
+  contents: read
+
+# A newer push to a pull request cancels the run that is still going. On main a run is
+# never cancelled half way, so a deploy that has started always gets its health check.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -78,11 +84,16 @@ jobs:
     env:
       HEALTH_URL: https://multi-vendor-marketplace-api.onrender.com/api/health
     steps:
-      # The hook URLs are secrets: anyone holding one can trigger a deploy.
+      # The hook URLs are secrets: anyone holding one can trigger a deploy. They are passed
+      # as env vars rather than pasted into the script, as GitHub's hardening guide advises.
       - name: Trigger backend deploy (Render)
-        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" > /dev/null
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: curl -fsS -X POST "$HOOK" > /dev/null
       - name: Trigger frontend deploy (Vercel)
-        run: curl -fsS -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}" > /dev/null
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: curl -fsS -X POST "$HOOK" > /dev/null
 
       # Render builds the Docker image and swaps it in only once /api/health passes,
       # so wait until the health check reports this commit.
