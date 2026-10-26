@@ -287,10 +287,10 @@ Demo goal (Friday): push a small code change -> GitHub Actions runs the tests ->
 - [x] Monitoring: UptimeRobot monitor on /api/health (5 min), resumed; caught one real 502 while the slept free instance woke up, then up
 - [x] README: Monitoring and logs section (how to read Render logs, docker compose logs, deploy history)
 - [x] Branch protection: main requires Backend tests, Frontend lint/tests/build, Docker images build (admins can bypass for the demo)
-- [ ] Final full-codebase PR review (/code-review), fix findings
+- [x] Final review of all Week 8 changes (Days 1-5 were reviewed day by day); fixed: read-only GITHUB_TOKEN, deploys on main never cancelled half way, hook secrets via env, nginx security headers + server_tokens off, stale CI comment
 
 ## Fri - Demo
-- [ ] Rehearse: small visible change -> push -> CI green -> auto-deploy -> live app updated
+- [x] Rehearsed: products page subtitle -> push -> CI green -> auto-deploy -> live (about 4-5 min end to end), then restored. Turn off VS Code format-on-save before the real demo
 - [x] README: CI badge, Docker steps, architecture + deployment diagram (mermaid), monitoring, Render known issues, Week 8 Thursday section
-- [ ] Final live regression (e2e + Newman) on the production URLs
+- [x] Final live smoke test on the Render API: register -> login -> browse -> cart -> checkout -> mock pay -> verify -> CONFIRMED/PAID (Playwright e2e + Newman not re-run against Render: they need the admin password)
 - [ ] week8 snapshot + index row
