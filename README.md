@@ -1,8 +1,10 @@
 # MarketHub: Multi-Vendor Marketplace
 
+[![CI](https://github.com/Web-3-Geeks/multi-vendor-marketplace/actions/workflows/ci.yml/badge.svg)](https://github.com/Web-3-Geeks/multi-vendor-marketplace/actions/workflows/ci.yml)
+
 A full-stack marketplace where customers shop, vendors sell, and admins run the platform. Each role gets exactly the access it needs, and every permission is enforced on the backend.
 
-This project is built one day at a time. Each day adds to the same codebase. Snapshots of the project at the end of each day live in `week6/DayN/`.
+This project is built one day at a time. Each day adds to the same codebase. Snapshots of the project at the end of each day live in `week6/DayN/`, and the production-hardened capstone in `week8/`.
 
 ## Overview
 
@@ -14,15 +16,18 @@ This project is built one day at a time. Each day adds to the same codebase. Sna
 
 What makes it a marketplace rather than a shop: one cart can hold products from several vendors, and each vendor sees and fulfils **only their own items** of that order. Every price, amount and commission is calculated on the server from the database, never from what the browser sends.
 
-Contents: [Live links](#live-links) · [Tech stack](#tech-stack) · [Project structure](#project-structure) · [Screenshots](#screenshots) · [Running locally](#running-locally) · [Running the tests](#running-the-tests) · [API](#api) · [Roles and permissions](#roles-and-permissions) · [Payment workflow](#payment-workflow) · [Security checklist](#security-checklist) · [Deployment](#deployment) · [Switching to a real payment provider](#switching-to-a-real-payment-provider) · [Test accounts](#test-accounts) · [Test results](#test-results) · [Known issues](#known-issues) · [Day-by-day notes](#day-1-setup-authentication-and-rbac)
+Contents: [Live links](#live-links) · [Tech stack](#tech-stack) · [Project structure](#project-structure) · [Screenshots](#screenshots) · [Running locally](#running-locally) · [Running with Docker](#running-with-docker) · [Running the tests](#running-the-tests) · [API](#api) · [Roles and permissions](#roles-and-permissions) · [Payment workflow](#payment-workflow) · [Security checklist](#security-checklist) · [Deployment and CI/CD](#deployment-and-cicd) · [Monitoring and logs](#monitoring-and-logs) · [Switching to a real payment provider](#switching-to-a-real-payment-provider) · [Test accounts](#test-accounts) · [Test results](#test-results) · [Known issues](#known-issues) · [Day-by-day notes](#day-1-setup-authentication-and-rbac)
 
 ## Live links
 
 | | URL |
 |---|---|
 | Frontend | https://multi-vendor-marketplace-weld.vercel.app |
-| Backend API | https://multi-vendor-marketplace-api.vercel.app/api |
-| Health check | https://multi-vendor-marketplace-api.vercel.app/api/health |
+| Backend API | https://multi-vendor-marketplace-api.onrender.com/api |
+| Health check | https://multi-vendor-marketplace-api.onrender.com/api/health (also shows the live commit) |
+| CI/CD runs | https://github.com/Web-3-Geeks/multi-vendor-marketplace/actions |
+
+The backend runs on Render's free plan. If nobody has called it for 15 minutes it sleeps, and the first request then takes about 15 seconds; UptimeRobot pings it every 5 minutes to keep it awake.
 
 **Demo accounts:** see [Test accounts](#test-accounts). Anyone can sign up as a customer; admin and vendor credentials are shared privately with the reviewer and are not stored in this repository.
 
@@ -36,7 +41,8 @@ Contents: [Live links](#live-links) · [Tech stack](#tech-stack) · [Project str
 | Frontend | React 19, Vite, React Router 7, Tailwind CSS 4, lucide-react |
 | Payments | Provider interface with a built-in mock provider (HMAC-signed webhooks); Stripe test mode is a documented drop-in |
 | Tests | Jest + Supertest + mongodb-memory-server (backend), Vitest + React Testing Library (frontend), Playwright (end to end), Newman (Postman collection) |
-| Hosting | Vercel (backend and frontend as separate projects), MongoDB Atlas |
+| Hosting | Render (backend, Docker), Vercel (frontend), MongoDB Atlas (Mumbai) |
+| DevOps | Docker + docker-compose, GitHub Actions (CI + deploy), UptimeRobot |
 
 ## Project structure
 
@@ -136,7 +142,7 @@ npm run seed            # creates the demo vendor and admin
 npm run dev             # http://localhost:5000
 ```
 
-`backend/.env.example` is fully commented, and `backend/.env.production.example` lists the production values (set those in the Vercel dashboard, never in a committed file).
+`backend/.env.example` is fully commented, and `backend/.env.production.example` lists the production values (set those in the Render dashboard, never in a committed file).
 
 `backend/.env`:
 
@@ -156,7 +162,7 @@ npm run dev             # http://localhost:5000
 | `SEED_ADMIN_PASSWORD` | Password for `admin@test.com`, used only by `npm run seed` |
 | `SEED_VENDOR_PASSWORD` | Password for `vendor@test.com`, used only by `npm run seed` |
 | `RATE_LIMIT_DISABLED` | Optional. `true` switches every rate limiter off. Automated tests and local load runs only, never on a deployed server |
-| `TRUST_PROXY` | Optional. Any value makes Express trust one proxy hop for the client IP. Vercel is detected automatically |
+| `TRUST_PROXY` | Any value makes Express trust one proxy hop for the client IP. **Set it to `1` on Render** (Vercel is detected automatically) |
 | `REQUEST_LOG` | Optional. `off` silences the one-line-per-request log |
 | `TEST_DATABASE_URL` | Optional, tests only. A database whose name ends in `_test`. Without it the tests use a throw-away in-memory MongoDB |
 
@@ -381,25 +387,53 @@ Guarantees (each is covered by an automated test):
 
 Limits to be aware of: see [Known issues](#known-issues) (the in-memory rate limiter on serverless, no email verification, no refresh tokens).
 
-## Deployment
+## Deployment and CI/CD
 
-Two Vercel projects (backend and frontend) and one MongoDB Atlas cluster.
+```mermaid
+flowchart LR
+  dev[git push to main] --> be
+  dev --> fe
+  subgraph ci [GitHub Actions]
+    be[Backend tests<br/>Jest] --> dk[Docker images build]
+    fe[Frontend lint, tests, build<br/>Vitest] --> dk
+    dk --> dep[Deploy job]
+  end
+  dep -- deploy hook --> render[Render<br/>backend Docker image<br/>Singapore]
+  dep -- deploy hook --> vercel[Vercel<br/>frontend static build]
+  user((Browser)) --> vercel
+  user -- /api --> render
+  render --> atlas[(MongoDB Atlas<br/>Mumbai)]
+  robot[UptimeRobot<br/>every 5 min] --> render
+```
 
-**Backend project** (root directory `backend`, Express preset, entry `server.js`)
-1. Set the environment variables from `backend/.env.production.example` (Settings, Environment Variables, Production). `FRONTEND_URL` must be the exact frontend URL, `https`, no trailing slash.
-2. Settings, Functions, **Function Region: Mumbai (bom1)** (or whichever region matches your Atlas cluster). A function far from the database pays the round-trip on every query: moving it next to the cluster cut a checkout from 3.2 s to 0.3 s.
-3. After the first deploy, build the indexes once from your machine with `DATABASE_URL` pointing at the production database: `cd backend && npm run db:setup`. Repeat after any release that adds an index. Then `npm run seed` once for the demo admin/vendor (with strong passwords).
-4. Check `https://<backend>/api/health` returns `{"status":"ok","database":"connected",...}`.
+**Pipeline** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Every push and pull request runs three jobs: backend tests (in-memory MongoDB, no secrets needed), frontend lint + tests + production build, and both Docker images. On a push to `main`, and only when all three are green, the deploy job calls the Render and Vercel deploy hooks and then polls `/api/health` until it reports the pushed commit, so a green run means the new version is actually live.
 
-**Frontend project** (root directory `frontend`, Vite preset)
-1. Set `VITE_API_URL=https://<backend>/api` for Production, then redeploy. Vite reads it at build time.
-2. `frontend/vercel.json` rewrites every path to `index.html` so deep links (`/orders/123`) work.
+**Only CI deploys.** Render's Auto-Deploy is off and `frontend/vercel.json` sets `git.deploymentEnabled: false`, so a push that fails its tests never reaches production. `main` is protected: the three CI checks must pass before a pull request can merge (admins can still push directly, which the demo uses).
 
-**Webhook.** The URL a real provider must call is `https://<backend>/api/payments/webhook`. With the mock provider the app calls it itself.
+**Secrets.** The two deploy hook URLs are GitHub repository secrets (`RENDER_DEPLOY_HOOK`, `VERCEL_DEPLOY_HOOK`): anyone holding one can trigger a deploy. Application secrets (`DATABASE_URL`, `JWT_SECRET`, payment keys) live only in the Render dashboard; `VITE_API_URL` is public and lives in Vercel. Nothing secret is in the repository or the images.
 
-**Atlas.** Network access must allow Vercel (`0.0.0.0/0` on the free tier, protected by the database user's password). Use a separate database for production and for development.
+**Backend on Render** (Web Service, Docker, root directory `backend`, region Singapore, free plan)
+1. Environment variables from `backend/.env.production.example`, plus `TRUST_PROXY=1`. Do not set `PORT`: Render provides it.
+2. Health Check Path `/api/health`: Render only switches traffic to a new deploy once it answers 200, so a broken release never replaces a working one.
+3. Auto-Deploy off; copy the Deploy Hook into the GitHub secret.
+4. After the first deploy of a new database, build the indexes once: `cd backend && DATABASE_URL=<production> npm run db:setup`.
 
-**Before every release:** `cd backend && npm test`, `cd frontend && npm run lint && npm test && npm run build`, push, then run the end-to-end suite and Postman collection against the live URLs.
+**Frontend on Vercel** (root directory `frontend`, Vite preset)
+1. `VITE_API_URL=https://multi-vendor-marketplace-api.onrender.com/api` for Production. Vite bakes it in at build time, so changing it needs a new deploy.
+2. Settings → Git → Deploy Hooks: create one for `main` and copy it into the GitHub secret.
+3. `frontend/vercel.json` rewrites every path to `index.html` so deep links (`/orders/123`) work.
+
+**Webhook.** A real provider must call `https://multi-vendor-marketplace-api.onrender.com/api/payments/webhook`. With the mock provider the app calls it itself.
+
+**Atlas.** Network access must allow the host (`0.0.0.0/0` on the free tier, protected by the database user's password). Use a separate database for production and for development.
+
+## Monitoring and logs
+
+- **Uptime:** an UptimeRobot HTTP monitor calls `/api/health` every 5 minutes and e-mails when it fails. The endpoint answers **503** `degraded` when MongoDB is unreachable (covered by `backend/tests/health.test.js`), so a dead database counts as down, not just a dead server.
+- **Which version is live:** `/api/health` returns `version`, the short commit Render deployed (`RENDER_GIT_COMMIT`). CI uses it to confirm a deploy; anyone can use it to check a fix is out.
+- **Request log:** one line per request, `METHOD /full/path STATUS DURATIONms user=<id or ->`. It never contains query strings or bodies, so passwords, tokens and search terms stay out of the logs. `REQUEST_LOG=off` silences it.
+- **Reading the logs:** Render → service → **Logs** (live tail, searchable: search a path like `/api/checkout`, or ` 500 ` for server errors). Locally: `docker compose logs -f api`. Startup lines show `MongoDB connected` or `MongoDB connection failed: <reason>` (credentials and host names removed); the same reason appears on `/api/health` while the database is down.
+- **Deploy history:** GitHub → Actions (tests and deploys per commit), Render → Events, Vercel → Deployments (each one should say "Deploy Hook").
 
 ## Switching to a real payment provider
 
@@ -443,11 +477,11 @@ Passwords are never stored in this repository. Test payments use the mock provid
 
 ## Test results
 
-Last full run (Day 5 code; the backend suite re-run in Week 8 after the health tests were added):
+Last full run (Day 5 code; backend and frontend re-run in Week 8, and both run in CI on every push):
 
 | Suite | Result |
 |---|---|
-| Backend: Jest + Supertest, 16 suites | **557 passed**, 0 failed (about 2 min) |
+| Backend: Jest + Supertest, 16 suites | **559 passed**, 0 failed (about 2 min) |
 | Frontend: Vitest + React Testing Library, 7 files | **74 passed**, 0 failed (about 8 s) |
 | End to end: Playwright in Microsoft Edge (desktop, 768px, 375px) | **57 checks passed**, no console errors |
 | Postman collection via Newman | **all requests and assertions passed** against the real backend |
@@ -457,7 +491,9 @@ Beyond the happy paths, the backend suites cover: every role against every prote
 
 ## Known issues
 
-- **The rate limiter keeps its counters in memory.** On Vercel serverless every warm instance counts separately, so the limits slow abuse down but are not a hard quota. A shared store (Redis / Upstash) is the production fix.
+- **Render free plan.** The backend sleeps after 15 idle minutes. UptimeRobot keeps it awake, but if the monitor stops, the first request takes about 15 s (Render may answer 502 meanwhile). It also gets a small CPU share, so register and login (bcrypt) take 1 to 3 s. A paid instance removes both.
+- **Backend in Singapore, database in Mumbai.** Render has no India region, so every query crosses that link: a checkout takes about 3 s, against 0.3 s when the backend ran in Mumbai on Vercel. Moving the Atlas cluster to Singapore (or a host with a Mumbai region) would fix it.
+- **The rate limiter keeps its counters in memory.** With one Render instance that is a real limit, but a restart resets it and a second instance would count separately. A shared store (Redis / Upstash) is the production fix.
 - **The mock provider is for development.** With `PAYMENT_PROVIDER=mock` any logged-in user can mark their own payment as paid. Switch provider before taking real money ([steps above](#switching-to-a-real-payment-provider)).
 - **Unpaid orders are cleaned up lazily** (when someone checks out or an admin opens the order list), because serverless has no background worker. A scheduled job (Vercel Cron) would be the production approach.
 - **Refunds are full only**, and a provider refund that succeeds followed by a database failure is logged for manual reconciliation, not retried.
@@ -814,3 +850,31 @@ The Playwright suite needs no database access, so it works the same against a lo
 - `docker compose up --build` from scratch: all three containers healthy, `/api/health` reports the database connected.
 - Seeded through the containers (`seed.js` + `seedDemo.js`: 25 products, 14 orders through real checkout, so transactions work in Docker).
 - Manual browser run on http://localhost:8080: customer login, add to cart, checkout, mock payment, verify, plus vendor and admin dashboards and refreshing deep links.
+
+### Thursday: CI/CD, production deploy and monitoring
+
+#### What was built
+
+- `.github/workflows/ci.yml`: backend tests, frontend lint/tests/build and a Docker image build on every push and pull request, then a deploy job on `main` that triggers Render and Vercel through deploy hooks and waits until `/api/health` reports the pushed commit. See [Deployment and CI/CD](#deployment-and-cicd).
+- The backend moved from Vercel serverless to a **Render Web Service built from `backend/Dockerfile`** (Singapore, free plan, health check `/api/health`, `TRUST_PROXY=1`). The frontend stays on Vercel and now calls the Render API.
+- Auto-deploy is off on both hosts (`frontend/vercel.json`, Render setting) and the old Vercel backend project is disconnected from Git, so only a green CI run deploys.
+- `main` branch protection requires the three CI checks.
+- `/api/health` returns `version` (the deployed commit) with 2 new tests; the request log now prints the full path (`/api/cart/items`) instead of the router-relative one (`/items`).
+- UptimeRobot monitors `/api/health` every 5 minutes with e-mail alerts. See [Monitoring and logs](#monitoring-and-logs).
+
+#### Key decisions and why
+
+**Deploy hooks, not platform CLIs.** A hook is a single secret URL per host, needs no CLI token with wide account rights in GitHub, and works the same for Render and Vercel. The trade-off is that a hook only starts a deploy, which is why the job then waits for the health check to report the new commit.
+
+**Deploy only after tests, and only from CI.** The hosts' own git auto-deploy would release a commit at the same moment its tests start. Turning it off makes the pipeline the single way to production.
+
+**Render for the backend.** The Docker image built on Tuesday runs unchanged (the same image is checked in CI), the server is long-running (no cold-start per function, in-memory rate limits mean something), and the health check gates every release. Singapore is the closest Render region to the Mumbai database.
+
+**Repository secrets, no environments.** One production target and one maintainer: repository secrets are enough. With a staging site or several people deploying, GitHub environments with required reviewers would be the next step.
+
+#### Testing done
+
+- Backend 559 passed (16 suites), frontend 74 passed, lint and build clean; the same runs pass in GitHub Actions.
+- First CD run green: Render served commit `1bd7240` and Vercel's deployment shows "Deploy Hook" with the same commit.
+- Live customer flow against the Render API: register, login, browse, add to cart, checkout (transaction), mock payment, verify, order CONFIRMED and PAID. Deep links on the frontend return 200, CORS refuses other origins, helmet headers present.
+- UptimeRobot caught one real outage: the free instance had slept while the monitor was paused, answered 502 while waking, then stayed up.

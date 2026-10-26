@@ -270,23 +270,27 @@ Demo goal (Friday): push a small code change -> GitHub Actions runs the tests ->
 - [x] frontend/Dockerfile (build with VITE_API_URL, serve with nginx, SPA fallback) + nginx.conf + .dockerignore
 - [x] docker-compose.yml: mongo (replica set, needed for transactions) + api + web, one command to run
 - [x] Docker install on the dev laptop + `docker compose up` verified (seeded, browser order + payment); README "Running with Docker" + Week 8 section
-- [ ] Found for Thursday: request log prints the router-relative path (`POST /items`) instead of the full URL (`/api/cart/items`)
+- [x] Found for Thursday: request log prints the router-relative path (`POST /items`) instead of the full URL (`/api/cart/items`) (fixed Thu)
 
-## Wed - Mentor clinic (questions to ask)
-- [ ] Secrets management in Actions (repo secrets vs environment secrets), deploy hooks vs CLI
-- [ ] Should deploys be blocked unless CI is green (branch protection)?
+## Wed - Mentor clinic (meeting did not happen; answered by the standard approach below)
+- [x] Secrets management: deploy hook URLs as GitHub repository secrets (RENDER_DEPLOY_HOOK, VERCEL_DEPLOY_HOOK), deploy hooks instead of CLI tokens
+- [x] Deploys only run after CI is green (deploy job `needs` all test jobs); branch protection still to switch on (Thu list)
 
 ## Thu - CI/CD + deploy + monitoring
-- [ ] .github/workflows/ci.yml: lint -> backend tests -> frontend tests -> build -> docker build check, on every push and PR
-- [ ] Deploy job on push to main (only after tests pass): Render deploy hook + Vercel deploy hook, then wait for /api/health
-- [ ] Render service from backend/Dockerfile with production env vars; FRONTEND_URL and VITE_API_URL updated; Atlas allows the Render IPs
-- [ ] Turn off the platforms' own git auto-deploy so only CI deploys
-- [ ] Monitoring: UptimeRobot on /api/health (also keeps the free Render service awake), structured request logs, how to read logs
-- [ ] Branch protection: main requires the CI check
+- [x] .github/workflows/ci.yml: lint -> backend tests -> frontend tests -> build -> docker build check, on every push and PR
+- [x] Deploy job on push to main (only after tests pass): Render deploy hook + Vercel deploy hook, then wait for /api/health to report the pushed commit (`version`) -> first CD run green, live = 1bd7240
+- [x] Render service (Singapore, free, Docker, health check /api/health, TRUST_PROXY=1) from backend/Dockerfile with production env vars; FRONTEND_URL and VITE_API_URL updated; Atlas allows the Render IPs; live customer flow checked (register -> cart -> checkout -> pay -> CONFIRMED)
+- [x] Turn off the platforms' own git auto-deploy so only CI deploys (Render Auto-Deploy off, frontend/vercel.json deploymentEnabled false)
+- [x] Confirmed: Vercel frontend deployment created by "Deploy Hook" (commit 1bd7240); old Vercel backend project disconnected from Git (delete after the demo)
+- [x] Request log shows the full path (method, path, status, ms, user id; never query or body)
+- [x] /api/health reports the live commit (`version`) + tests
+- [x] Monitoring: UptimeRobot monitor on /api/health (5 min), resumed; caught one real 502 while the slept free instance woke up, then up
+- [x] README: Monitoring and logs section (how to read Render logs, docker compose logs, deploy history)
+- [x] Branch protection: main requires Backend tests, Frontend lint/tests/build, Docker images build (admins can bypass for the demo)
 - [ ] Final full-codebase PR review (/code-review), fix findings
 
 ## Fri - Demo
 - [ ] Rehearse: small visible change -> push -> CI green -> auto-deploy -> live app updated
-- [ ] README: CI badge, Docker steps, architecture + deployment diagram, monitoring
+- [x] README: CI badge, Docker steps, architecture + deployment diagram (mermaid), monitoring, Render known issues, Week 8 Thursday section
 - [ ] Final live regression (e2e + Newman) on the production URLs
 - [ ] week8 snapshot + index row
